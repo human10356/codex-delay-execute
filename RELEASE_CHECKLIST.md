@@ -25,13 +25,14 @@
 - [x] A stopped persistent timer catches up immediately when reactivated after its deadline.
 - [x] A cache-busted candidate installs from the local Marketplace into an isolated Codex home; the installed copy passes manifest, skill, and all 29 automated tests.
 - [x] The full Git history and staged release candidate are free of credential patterns and machine-specific paths.
+- [x] An isolated Ubuntu 24.04 systemd lifecycle test delivered each task exactly once after a stopped non-lingering user manager was started again and after a lingering user manager restarted automatically following a full container userspace restart.
 
 ## Remaining release gates, in order
 
 ### Before changing repository visibility
 
 - [ ] Verify the latest commit passes every GitHub Actions matrix job.
-- [ ] Verify a missed timer after logout or reboot, both with user lingering enabled and after the user manager starts again without lingering.
+- [ ] Repeat the missed-timer lifecycle check across a physical host logout or reboot before treating the isolated systemd result as release-complete evidence.
 - [ ] Update release wording, replace the changelog's `unreleased` marker with the release date, and commit the result.
 - [ ] Create and push the annotated `v0.1.0-beta.2` tag from the reviewed commit.
 

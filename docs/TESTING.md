@@ -28,8 +28,9 @@ On 2026-09-14, the release candidate was tested on Linux with Codex CLI 0.154.0,
 - A `Persistent=true` timer was stopped before its deadline and restarted after the deadline. Its generated runner executed immediately and both timer and service reported success.
 - Next-run calculation was verified across both a daylight-saving offset change and a nonexistent spring-forward wall time.
 - A private `v0.1.0-beta.1` installation was upgraded to the `0.1.0-beta.2` candidate. Plugin data survived both upgrade and uninstall, while the installed plugin cache was removed on uninstall.
+- In an isolated Ubuntu 24.04.4 systemd 255 environment, a real generated timer was allowed to expire while a non-lingering user manager was stopped. Starting the user manager again delivered the task exactly once and recorded a successful service result. A second generated timer expired while the full container userspace was stopped; with lingering enabled, the user manager started automatically and delivered that task exactly once after startup. Both tasks ran from a non-Git directory through the detached fallback.
 
-The machine had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified, but a physical logout/reboot was deliberately not performed because it would interrupt the testing session. That final operational scenario remains distinct from automated coverage.
+The host machine had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified, but a physical host logout/reboot was deliberately not performed because it would interrupt the testing session. The isolated lifecycle test exercises the relevant systemd shutdown, startup, lingering, and persistent-timer behavior, but the physical host scenario remains a separate final release gate.
 
 ## Git installation
 
@@ -96,7 +97,9 @@ Use disposable prompts and inspect `$delay-execute list`, task history, logs, an
 - [x] Hold the conversation writer lock and verify the terminal state becomes `blocked_by_active_session` without automatic restart.
 - [x] Cancel queued and active tasks and verify their timer, service, and runner are stopped.
 - [x] Stop a persistent timer across its deadline and verify it runs immediately after reactivation.
-- [ ] Test a missed timer after a physical logout or reboot makes the user systemd manager available again.
+- [x] Stop a non-lingering user manager across a timer deadline and verify the timer runs exactly once when the user manager starts again.
+- [x] Stop and restart an isolated Linux systemd userspace across a timer deadline with lingering enabled and verify the user manager and task start automatically.
+- [ ] Repeat the missed-timer test across a physical host logout or reboot.
 - [x] Test migration from the legacy state directory with non-sensitive fixture data.
 - [x] Uninstall the plugin and verify the documented data-retention behavior.
 
