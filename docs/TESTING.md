@@ -42,6 +42,44 @@ codex plugin add delay-execute@delay-execute-marketplace
 
 Start a new Codex CLI thread, open `/hooks`, review the hook command, and trust it before running the manual scenarios.
 
+## Anonymous public-install gate
+
+Run this only after the repository is public and `v0.1.0-beta.2` exists. Use an empty temporary Codex home and the HTTPS URL so the test cannot silently rely on the maintainer's SSH key or existing marketplace cache:
+
+```bash
+clean_codex_home="$(mktemp -d)"
+env CODEX_HOME="$clean_codex_home" \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false \
+  codex plugin marketplace add \
+  https://github.com/human10356/codex-delay-execute.git \
+  --ref v0.1.0-beta.2
+env CODEX_HOME="$clean_codex_home" \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false \
+  codex plugin add \
+  delay-execute@delay-execute-marketplace
+env CODEX_HOME="$clean_codex_home" codex plugin list
+```
+
+Clone the same tag with Git credential helpers disabled, then validate the complete Marketplace repository:
+
+```bash
+anonymous_checkout="$(mktemp -d)"
+env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false \
+  git clone --branch v0.1.0-beta.2 --depth 1 \
+  https://github.com/human10356/codex-delay-execute.git \
+  "$anonymous_checkout"
+python3 "$anonymous_checkout/scripts/validate_release.py"
+python3 -m unittest discover \
+  -s "$anonymous_checkout/plugins/delay-execute/tests" -v
+```
+
+Locate the installed plugin under `$clean_codex_home/plugins/cache`, then run the plugin validator, skill validator, Python compilation, and all 29 tests against that cache copy. The anonymous checkout and clean Codex home must not contain GitHub credentials. Remove both temporary directories after recording redacted results.
+
+An anonymous clone or install before the visibility change must fail. A successful private SSH install does not satisfy this gate.
+
 ## Linux E2E matrix
 
 Use disposable prompts and inspect `$delay-execute list`, task history, logs, and relevant user units after each scenario.

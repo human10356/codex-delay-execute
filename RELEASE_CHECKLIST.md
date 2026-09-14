@@ -26,9 +26,22 @@
 - [x] A cache-busted candidate installs from the local Marketplace into an isolated Codex home; the installed copy passes manifest, skill, and all 29 automated tests.
 - [x] The full Git history and staged release candidate are free of credential patterns and machine-specific paths.
 
-## Required before making the repository public
+## Remaining release gates, in order
 
-- [ ] Verify behavior after logout or reboot, with and without user lingering.
-- [ ] Change repository visibility to public.
-- [ ] Install from a clean Linux account without GitHub credentials.
-- [ ] Update private-beta wording and publish final release notes.
+### Before changing repository visibility
+
+- [ ] Verify the latest commit passes every GitHub Actions matrix job.
+- [ ] Verify a missed timer after logout or reboot, both with user lingering enabled and after the user manager starts again without lingering.
+- [ ] Update release wording, replace the changelog's `unreleased` marker with the release date, and commit the result.
+- [ ] Create and push the annotated `v0.1.0-beta.2` tag from the reviewed commit.
+
+### Publication boundary
+
+- [ ] Change repository visibility to public. This is the final publication state change; do it only after every pre-public gate passes.
+
+### Read-only public verification
+
+- [ ] Confirm the repository, privacy policy, security policy, and release tag are anonymously readable; confirm the advisory URL reaches GitHub's expected sign-in boundary.
+- [ ] Install `v0.1.0-beta.2` through the HTTPS Git marketplace source in a clean Linux environment without GitHub credentials.
+- [ ] Run the release validator against an anonymous tag checkout; run the plugin and skill validators plus all 29 automated tests against the anonymously installed cache copy.
+- [ ] Publish the final GitHub release notes only after the anonymous installation succeeds.
