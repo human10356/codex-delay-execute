@@ -10,7 +10,7 @@
 - [x] Unit tests, Python compilation, release validation, and secret scanning pass.
 - [x] The tagged `0.1.0-beta.1` private Git marketplace installs into the Codex plugin cache.
 - [x] Install the local `0.1.0-beta.3` candidate and verify the installed cache matches its source.
-- [ ] Start a new Codex thread and verify the installed beta.3 skill and hook are loaded.
+- [x] Start a new Codex thread and verify the installed beta.3 skill and hook are loaded.
 - [x] Requirements, security behavior, privacy behavior, and limitations are documented.
 - [x] Explicit test state directories do not import real legacy user state.
 - [x] Real user-level systemd accepts future one-time, daily, and weekly timers from a non-Git directory.
@@ -29,6 +29,7 @@
 - [x] An isolated Ubuntu 24.04 systemd lifecycle test delivered each task exactly once after a stopped non-lingering user manager was started again and after a lingering user manager restarted automatically following a full container userspace restart.
 - [x] A real user-systemd regression test disabled a claimed one-time timer and suppressed a forced second service activation without a second Codex invocation; recurring runner coverage still permits later daily and weekly invocations.
 - [x] A WSL distribution userspace restart was distinguished from a full WSL2 VM restart by PID 1 start time, kernel boot ID, journal boot ID, and Windows boot time; it was not counted as lifecycle-gate evidence.
+- [x] A host-issued `wsl --shutdown` changed the WSL kernel boot ID and created a new journal boot; no beta.3 task was pending, so this proves the VM lifecycle step but not persistent-timer catch-up.
 
 ## Remaining release gates, in order
 
