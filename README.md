@@ -9,14 +9,14 @@ The source tree contains the `0.1.0-beta.2` release candidate.
 Using HTTPS:
 
 ```bash
-codex plugin marketplace add https://github.com/human10356/delay-execute-marketplace.git --ref main
+codex plugin marketplace add https://github.com/human10356/codex-delay-execute.git --ref main
 codex plugin add delay-execute@delay-execute-marketplace
 ```
 
 Using SSH, including for a private fork when local Git credentials permit access:
 
 ```bash
-codex plugin marketplace add git@github.com:human10356/delay-execute-marketplace.git --ref main
+codex plugin marketplace add git@github.com:human10356/codex-delay-execute.git --ref main
 codex plugin add delay-execute@delay-execute-marketplace
 ```
 

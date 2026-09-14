@@ -8,6 +8,7 @@
 - Wait briefly between pasting a prompt and sending Enter so Codex CLI 0.154.0 submits it reliably.
 - Treat the expected SIGTERM from cancelling an active task as a successful systemd service exit.
 - Enforce user-only permissions on runner-created logs, history, and imported legacy state.
+- Update repository metadata and installation URLs for the `codex-delay-execute` repository name.
 
 ## 0.1.0-beta.1
 

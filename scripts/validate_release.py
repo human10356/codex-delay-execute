@@ -17,6 +17,7 @@ SEMVER = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 ABSOLUTE_USER_HOME = re.compile(r"/(?:home|Users)/[^/\s]+(?:/|\b)")
+REPOSITORY_URL = "https://github.com/human10356/codex-delay-execute"
 
 
 def fail(message: str) -> None:
@@ -90,8 +91,15 @@ def validate() -> None:
         fail("portable and compatibility manifest versions differ")
     if portable.get("license") != "MIT" or compatibility.get("license") != "MIT":
         fail("both manifests must declare the MIT license")
+    for manifest_name, manifest in (("portable", portable), ("compatibility", compatibility)):
+        if manifest.get("repository") != REPOSITORY_URL:
+            fail(f"{manifest_name} manifest repository URL is stale or unexpected")
+        if manifest.get("homepage") != f"{REPOSITORY_URL}/tree/main/plugins/delay-execute":
+            fail(f"{manifest_name} manifest homepage URL is stale or unexpected")
 
     extension = portable.get("extensions", {}).get("com.openai", {})
+    if extension.get("interface", {}).get("websiteURL") != REPOSITORY_URL:
+        fail("portable manifest website URL is stale or unexpected")
     require_relative_file(PLUGIN, extension.get("hooks"), "OpenAI hook path")
     prompts = extension.get("interface", {}).get("defaultPrompt")
     if not isinstance(prompts, list) or not 1 <= len(prompts) <= 3:
