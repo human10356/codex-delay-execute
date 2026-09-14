@@ -1,6 +1,6 @@
 # Delay Execute
 
-> Beta 版本：`0.1.0-beta.1`。需要支持用户级 systemd 的 Linux。
+> Beta 候选版本：`0.1.0-beta.2`。需要支持用户级 systemd 的 Linux。
 
 Delay Execute 是一个面向 Linux Codex CLI 的延时任务插件。它可以在用户明确确认后，于指定时间把提示词提交到当前对话。
 
@@ -28,7 +28,7 @@ Codex 会把插件安装到当前 Codex home（默认是 `~/.codex`）管理的�
 
 插件不包含用户名、源码目录或固定缓存版本路径。只有用户级 systemd unit 按系统规范写入 `~/.config/systemd/user/`。
 
-从旧版升级后，首次运行 helper 会把 `~/.local/state/codex-delay-execute` 中的任务元数据、待确认记录、日志和历史记录一次性导入新数据目录。旧 runner 可能包含过期安装路径，因此不会复制。
+从旧版升级后，第一次执行插件命令时会把 `~/.local/state/codex-delay-execute` 中的任务元数据、待确认记录、日志和历史记录一次性导入新数据目录。旧 runner 可能包含过期安装路径，因此不会复制。直接调用 helper 或使用隔离测试目录时，除非显式请求，否则不会导入旧数据。
 
 安装或升级后，请新建 Codex 对话以加载新版 skill 和 hook。首次使用前需要通过 `/hooks` 审查并信任 Delay Execute hook；安装插件本身不会自动信任 hook。
 

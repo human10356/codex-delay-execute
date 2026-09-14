@@ -6,4 +6,4 @@ The plugin does not broaden Codex permissions, bypass approvals, or embed creden
 
 Do not include secrets in delayed prompts. Unattended tasks can fail when network access, repository credentials, authentication, quotas, or interactive approval are required.
 
-Report security issues privately to the repository owner instead of opening a public issue containing sensitive details.
+Report security issues through a private repository security advisory at `https://github.com/human10356/delay-execute-marketplace/security/advisories/new`. Do not open a public issue containing credentials, prompt contents, session identifiers, filesystem paths, or unredacted logs.

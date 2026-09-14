@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.0-beta.2 (unreleased)
+
+- Add CI, release validation, evaluation cases, privacy documentation, and a public-release checklist.
+- Keep explicit `--state-dir` runs isolated instead of importing legacy user data.
+
 ## 0.1.0-beta.1
 
 - Add confirmed one-time, daily, and weekly delayed prompts.

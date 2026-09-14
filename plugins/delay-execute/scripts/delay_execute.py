@@ -455,6 +455,7 @@ def command_transition(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--import-legacy-state", action="store_true", help=argparse.SUPPRESS)
     commands = parser.add_subparsers(dest="command", required=True)
     stage = commands.add_parser("stage")
     stage.add_argument("--session-id", required=True)
@@ -485,7 +486,8 @@ def main() -> int:
     if args.state_dir is not None:
         configure_state_dir(args.state_dir)
     ensure_directories()
-    migrate_legacy_state()
+    if args.import_legacy_state:
+        migrate_legacy_state()
     if args.command == "stage" and args.weekly_at and not args.weekday:
         fail("--weekly-at 必须与 --weekday（mon 至 sun）一起使用")
     if args.command == "stage" and args.weekday and not args.weekly_at:

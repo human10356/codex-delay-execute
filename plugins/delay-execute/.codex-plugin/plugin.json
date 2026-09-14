@@ -1,6 +1,6 @@
 {
   "name": "delay-execute",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Schedule a confirmed prompt to resume the current Codex session on Linux.",
   "author": {
     "name": "human10356",

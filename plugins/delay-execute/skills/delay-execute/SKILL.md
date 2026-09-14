@@ -28,7 +28,7 @@ The active-session hook supplies a JSON object containing exact `session_id`, `c
    If the user gives no time, date, recurrence, or unambiguous relative delay, ask one concise question and do not stage anything. If a one-time time has already passed today, state that it resolves to tomorrow before staging.
 2. Run this command exactly once, replacing arguments with shell-safe values from the hook context and exactly one schedule form:
 
-   `python3 "<helper_path>" --state-dir "<state_dir>" stage --session-id <session_id> --cwd <cwd> --at <HH:MM> --prompt <prompt>`
+   `python3 "<helper_path>" --state-dir "<state_dir>" --import-legacy-state stage --session-id <session_id> --cwd <cwd> --at <HH:MM> --prompt <prompt>`
 
 3. Read the JSON response and show a confirmation preview. It must include task ID, schedule type, exact next local execution time including date and timezone, current working directory, exact prompt, execution mode, delivery mode, and delivery policy. State that no timer has been created yet. For `non_git`, explain that the confirmed runner will use `--skip-git-repo-check` for the captured working directory. For a tmux-attached task, explain that it waits up to one hour for the original pane to be idle instead of opening a second session writer. It does not retry automatically after a terminal failure.
 4. Ask the user to reply exactly: `$delay-execute confirm <任务ID>`.
@@ -39,15 +39,15 @@ Do not install, enable, or modify a systemd timer during staging.
 
 Only treat `$delay-execute confirm <任务ID>` as confirmation. Do not treat a bare “确认”, “好的”, or an unrelated message as authorization.
 
-1. Reuse the exact `helper_path` and `state_dir` from the staged task's active-session hook context. Run `python3 "<helper_path>" --state-dir "<state_dir>" install --task-id <任务ID>`.
+1. Reuse the exact `helper_path` and `state_dir` from the staged task's active-session hook context. Run `python3 "<helper_path>" --state-dir "<state_dir>" --import-legacy-state install --task-id <任务ID>`.
 2. Report the schedule, exact next execution time, prompt, systemd timer name, runner-script path, log path, history path, and plugin-data directory returned by the helper. Do not substitute a source checkout path.
 3. Explain that the computer must be running. `Persistent=true` causes a missed timer to run after the user systemd manager becomes available; after logout, the user may need `loginctl enable-linger <user>` if their system does not keep the user manager alive.
 4. State that the task uses the current Codex CLI authentication and permissions. It does not bypass quota, authentication, hook trust, or approval policies.
 
 ## List and cancel
 
-- `$delay-execute list`: use the current hook's exact paths to run `python3 "<helper_path>" --state-dir "<state_dir>" list` and render each task's timer state, next run, schedule, and prompt succinctly.
-- `$delay-execute cancel <任务ID>`: first show the task being targeted and request the exact confirmation `$delay-execute confirm-cancel <任务ID>`. Only then use the current hook's exact paths to run `python3 "<helper_path>" --state-dir "<state_dir>" cancel --task-id <任务ID>`.
+- `$delay-execute list`: use the current hook's exact paths to run `python3 "<helper_path>" --state-dir "<state_dir>" --import-legacy-state list` and render each task's timer state, next run, schedule, and prompt succinctly.
+- `$delay-execute cancel <任务ID>`: first show the task being targeted and request the exact confirmation `$delay-execute confirm-cancel <任务ID>`. Only then use the current hook's exact paths to run `python3 "<helper_path>" --state-dir "<state_dir>" --import-legacy-state cancel --task-id <任务ID>`.
 
 ## Safety rules
 

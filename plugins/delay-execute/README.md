@@ -1,6 +1,6 @@
 # Delay Execute
 
-> Beta release: `0.1.0-beta.1`. Linux with user-level systemd is required.
+> Beta release candidate: `0.1.0-beta.2`. Linux with user-level systemd is required.
 
 Delay Execute schedules a confirmed prompt for the current Codex CLI conversation on Linux. When the originating tmux pane is still available, the task waits for that pane to become idle and submits the prompt there. If the pane no longer exists, it falls back to `codex exec resume`.
 
@@ -28,7 +28,7 @@ Codex installs the package under the active Codex home (normally `~/.codex`) and
 
 No username, source-checkout path, or fixed `~/.codex/plugins/cache/...` version path is embedded in the plugin. The only files intentionally created outside Codex data are user-level systemd units under `~/.config/systemd/user/`.
 
-On first helper use after upgrading from an older local build, task metadata, pending confirmations, logs, and history are imported once from `~/.local/state/codex-delay-execute`. Generated legacy runners are not copied because they can contain obsolete installation paths.
+On the first plugin command after upgrading from an older local build, task metadata, pending confirmations, logs, and history are imported once from `~/.local/state/codex-delay-execute`. Generated legacy runners are not copied because they can contain obsolete installation paths. Direct helper invocations and isolated test directories do not import legacy data unless explicitly requested.
 
 After installation or an update, start a new Codex thread so the current plugin skill and hook definition are loaded. Plugin hooks are not trusted automatically; review and trust the Delay Execute hook with `/hooks` before first use.
 

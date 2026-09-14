@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,6 +60,46 @@ class ExecutionModeTests(unittest.TestCase):
         self.assertIn('"id":"old"', task)
         self.assertIn('"event":"old"', history)
         self.assertFalse(runner_exists)
+
+    def test_legacy_state_is_not_imported_without_explicit_opt_in(self):
+        original_state_dir = delay_execute.STATE_DIR
+        try:
+            with tempfile.TemporaryDirectory() as temporary, patch.object(
+                sys, "argv", [str(SCRIPT), "--state-dir", temporary, "list"]
+            ), patch.object(delay_execute, "ensure_directories"), patch.object(
+                delay_execute, "migrate_legacy_state"
+            ) as migrate, patch.object(delay_execute, "command_list") as command_list:
+                result = delay_execute.main()
+        finally:
+            delay_execute.configure_state_dir(original_state_dir)
+
+        self.assertEqual(result, 0)
+        migrate.assert_not_called()
+        command_list.assert_called_once()
+
+    def test_legacy_state_import_can_be_explicitly_requested(self):
+        original_state_dir = delay_execute.STATE_DIR
+        try:
+            with tempfile.TemporaryDirectory() as temporary, patch.object(
+                sys,
+                "argv",
+                [
+                    str(SCRIPT),
+                    "--state-dir",
+                    temporary,
+                    "--import-legacy-state",
+                    "list",
+                ],
+            ), patch.object(delay_execute, "ensure_directories"), patch.object(
+                delay_execute, "migrate_legacy_state"
+            ) as migrate, patch.object(delay_execute, "command_list") as command_list:
+                result = delay_execute.main()
+        finally:
+            delay_execute.configure_state_dir(original_state_dir)
+
+        self.assertEqual(result, 0)
+        migrate.assert_called_once_with()
+        command_list.assert_called_once()
 
     def test_hook_uses_the_installed_plugin_root(self):
         hook = json.loads(
