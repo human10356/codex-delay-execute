@@ -18,6 +18,7 @@
 - [x] Cancelling an active runner is reported as a successful SIGTERM service exit and leaves no failed user unit.
 - [x] Private Git upgrade from `0.1.0-beta.1` to the `0.1.0-beta.2` candidate preserves plugin data; uninstall removes the cache and retains documented data.
 - [x] Real systemd next-run timestamps match plugin calculations for one-time, daily, and weekly schedules.
+- [x] A stopped persistent timer catches up immediately when reactivated after its deadline.
 - [x] The full Git history and staged release candidate are free of credential patterns and machine-specific paths.
 
 ## Required before making the repository public

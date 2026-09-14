@@ -22,6 +22,7 @@ On 2026-09-14, the release candidate was tested on Linux with Codex CLI 0.154.0,
 - An idle real Codex tmux pane received and executed the delayed prompt. A busy pane remained in `waiting_for_idle` and did not start a detached writer.
 - Destroying the captured pane produced exactly one successful `codex exec resume`. A real writer conflict became the terminal `blocked_by_active_session` state without a retry.
 - Cancelling both queued and actively waiting tasks removed their units and processes. Expected SIGTERM cancellation left no failed unit and did not degrade the user manager.
+- A `Persistent=true` timer was stopped before its deadline and restarted after the deadline. Its generated runner executed immediately and both timer and service reported success.
 - A private `v0.1.0-beta.1` installation was upgraded to the `0.1.0-beta.2` candidate. Plugin data survived both upgrade and uninstall, while the installed plugin cache was removed on uninstall.
 
 The machine had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified, but a physical logout/reboot was deliberately not performed because it would interrupt the testing session. That final operational scenario remains distinct from automated coverage.
@@ -50,7 +51,8 @@ Use disposable prompts and inspect `$delay-execute list`, task history, logs, an
 - [x] Destroy the captured pane and verify exactly one detached resume attempt occurs.
 - [x] Hold the conversation writer lock and verify the terminal state becomes `blocked_by_active_session` without automatic restart.
 - [x] Cancel queued and active tasks and verify their timer, service, and runner are stopped.
-- [ ] Test a missed timer after the user systemd manager becomes available again.
+- [x] Stop a persistent timer across its deadline and verify it runs immediately after reactivation.
+- [ ] Test a missed timer after a physical logout or reboot makes the user systemd manager available again.
 - [x] Test migration from the legacy state directory with non-sensitive fixture data.
 - [x] Uninstall the plugin and verify the documented data-retention behavior.
 
