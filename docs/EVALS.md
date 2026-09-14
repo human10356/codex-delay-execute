@@ -46,6 +46,13 @@ These cases are written so another tester can evaluate the plugin without intern
 - Expected workflow: Submit the stored prompt with `codex queue` for the captured session ID without sending terminal keystrokes.
 - Expected result: Runtime state becomes `queued_to_session`; no detached writer is launched. This state means Codex accepted the message, not that a busy turn has already finished processing it.
 
+### 7. Repeated one-time service activation
+
+- User prompt: A previously confirmed one-time task becomes due.
+- Setup: Allow the task to make its first attempt, then manually start the same generated service again.
+- Expected workflow: The first attempt durably records its claim and disables the timer before invoking Codex.
+- Expected result: The second activation records `duplicate_suppressed`, leaves `attempt_count` at 1, and does not invoke `codex queue` or `codex exec resume` again.
+
 ## Negative cases
 
 ### 1. Missing schedule

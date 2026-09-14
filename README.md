@@ -2,7 +2,7 @@
 
 Beta marketplace for the Linux-only Delay Execute plugin for Codex CLI.
 
-The source tree contains the `0.1.0-beta.2` release candidate.
+The source tree contains the `0.1.0-beta.3` release candidate.
 
 ## Installation
 

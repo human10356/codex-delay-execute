@@ -1,6 +1,6 @@
 # Delay Execute
 
-> Beta release candidate: `0.1.0-beta.2`. Linux with user-level systemd is required.
+> Beta release candidate: `0.1.0-beta.3`. Linux with user-level systemd is required.
 
 Delay Execute schedules a confirmed prompt for the current Codex CLI conversation on Linux. When the originating tmux pane and Codex process are still available, the task submits the prompt through the official `codex queue` command. If they are no longer available, it falls back to `codex exec resume`.
 
@@ -77,11 +77,13 @@ If the captured pane has disappeared or its process identity has changed, the ta
 
 If queueing fails, the task makes one detached resume attempt. Detached writer conflicts are recorded as `blocked_by_active_session`. Terminal failures are not automatically restarted, preventing an old task from indefinitely holding a conversation lock.
 
+A one-time task durably claims its only attempt before invoking Codex and immediately attempts to disable its timer. A disarm failure is recorded with the real systemd exit code, while the durable claim still suppresses later activation without invoking Codex. The no-retry policy favors duplicate prevention: a host failure after the claim but before delivery can leave the task undelivered.
+
 When `codex` resolves to the Codex HUD shim, generated runners automatically use its `--no-hud --` pass-through so non-interactive systemd services invoke the native CLI without requiring a terminal.
 
 ## Runtime states and troubleshooting
 
-New task records use these runtime states: `queued`, `queued_to_session`, `detached_running`, `completed`, `blocked_by_active_session`, and `failed`. `queued_to_session` means Codex accepted the attached message; it does not claim that a busy turn has already finished processing it. Legacy records can still contain `waiting_for_idle` or `injected`.
+New task records use these runtime states: `claimed`, `queued`, `queued_to_session`, `detached_running`, `completed`, `blocked_by_active_session`, and `failed`. `queued_to_session` means Codex accepted the attached message; it does not claim that a busy turn has already finished processing it. Legacy records can still contain `waiting_for_idle` or `injected`.
 
 Use `$delay-execute list` for the current state. The installed task record contains exact runner, log, history, and state-directory paths.
 

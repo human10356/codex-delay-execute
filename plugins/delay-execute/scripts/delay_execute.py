@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 APP = "codex-delay-execute"
 SYSTEMD_DIR = Path.home() / ".config" / "systemd" / "user"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+ALREADY_CLAIMED = 3
 
 
 def default_state_dir(environ: dict[str, str] | None = None) -> Path:
@@ -344,6 +345,34 @@ def transition_task(identifier: str, status: str) -> None:
     write_json(path, record)
 
 
+def claim_task(identifier: str) -> bool:
+    path = TASK_DIR / f"{identifier}.json"
+    if not path.exists():
+        fail(f"未找到已安装任务: {identifier}")
+    record = read_json(path)
+    schedule_type = record.get("schedule_type")
+    if schedule_type not in {"once", "daily", "weekly"}:
+        fail(f"任务计划类型无效: {identifier}")
+    attempt_count = record.get("attempt_count", 0)
+    if (
+        isinstance(attempt_count, bool)
+        or not isinstance(attempt_count, int)
+        or attempt_count < 0
+    ):
+        fail(f"任务尝试次数无效: {identifier}")
+    if schedule_type == "once" and attempt_count > 0:
+        return False
+    now = dt.datetime.now().astimezone().isoformat()
+    record["attempt_count"] = attempt_count + 1
+    record["last_attempt_started_at"] = now
+    record["runtime_status"] = "claimed"
+    if schedule_type == "once":
+        record["status"] = "attempted"
+    record["updated_at"] = now
+    write_json(path, record)
+    return True
+
+
 def is_git_repository(cwd: Path) -> bool:
     try:
         result = subprocess.run(
@@ -491,6 +520,9 @@ record_event() {{
 transition() {{
   python3 {script} --state-dir {state_dir} transition --task-id {shlex.quote(identifier)} --status "$1" >> {shlex.quote(str(log_file))} 2>&1
 }}
+claim() {{
+  python3 {script} --state-dir {state_dir} claim --task-id {shlex.quote(identifier)} >> {shlex.quote(str(log_file))} 2>&1
+}}
 finish() {{
   status=$?
   record_event finished "$status"
@@ -498,6 +530,27 @@ finish() {{
   trap - EXIT
   exit "$status"
 }}
+set +e
+claim
+claim_status=$?
+set -e
+if [ "$claim_status" -eq {ALREADY_CLAIMED} ]; then
+  record_event duplicate_suppressed 0
+  exit 0
+fi
+if [ "$claim_status" -ne 0 ]; then
+  record_event claim_failed "$claim_status"
+  exit "$claim_status"
+fi
+if [ {shlex.quote(record.get('schedule_type', 'once'))} = once ]; then
+  set +e
+  systemctl --user disable --now {shlex.quote(unit_name(identifier) + '.timer')} >> {shlex.quote(str(log_file))} 2>&1
+  disarm_status=$?
+  set -e
+  if [ "$disarm_status" -ne 0 ]; then
+    record_event timer_disarm_failed "$disarm_status"
+  fi
+fi
 trap finish EXIT
 cd {shlex.quote(record['cwd'])}
 record_event queued 0
@@ -597,6 +650,7 @@ def command_install(args: argparse.Namespace) -> None:
     os.chmod(timer, 0o600)
     record["status"] = "scheduled"
     record["runtime_status"] = "queued"
+    record["attempt_count"] = 0
     record["runner"] = str(runner)
     record["timer"] = f"{name}.timer"
     record["history"] = str(HISTORY_FILE)
@@ -642,6 +696,12 @@ def command_transition(args: argparse.Namespace) -> None:
     transition_task(args.task_id, args.status)
 
 
+def command_claim(args: argparse.Namespace) -> None:
+    ensure_directories()
+    if not claim_task(args.task_id):
+        raise SystemExit(ALREADY_CLAIMED)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, help=argparse.SUPPRESS)
@@ -668,6 +728,9 @@ def build_parser() -> argparse.ArgumentParser:
     transition.add_argument("--task-id", required=True)
     transition.add_argument("--status", required=True)
     transition.set_defaults(handler=command_transition)
+    claim = commands.add_parser("claim", help=argparse.SUPPRESS)
+    claim.add_argument("--task-id", required=True)
+    claim.set_defaults(handler=command_claim)
     return parser
 
 

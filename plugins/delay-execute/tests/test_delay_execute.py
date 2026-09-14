@@ -203,6 +203,22 @@ class ExecutionModeTests(unittest.TestCase):
             ],
         )
 
+    def test_claim_rejects_a_corrupt_schedule_type(self):
+        original_state_dir = delay_execute.STATE_DIR
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                delay_execute.configure_state_dir(temporary)
+                delay_execute.ensure_directories()
+                delay_execute.write_json(
+                    delay_execute.TASK_DIR / "corrupt.json",
+                    {"id": "corrupt", "schedule_type": "unexpected"},
+                )
+
+                with self.assertRaisesRegex(SystemExit, "任务计划类型无效"):
+                    delay_execute.claim_task("corrupt")
+        finally:
+            delay_execute.configure_state_dir(original_state_dir)
+
     def test_attached_delivery_uses_the_official_session_queue(self):
         self.assertEqual(
             delay_execute.queue_command_parts(

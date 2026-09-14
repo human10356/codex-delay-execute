@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "delay-execute",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3+codex.20260914162116",
   "description": "Schedule a confirmed prompt to resume the current Codex CLI session on Linux.",
   "author": {
     "name": "human10356",

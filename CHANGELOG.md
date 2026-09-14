@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.1.0-beta.2 (unreleased)
+## 0.1.0-beta.3 (unreleased)
+
+- Persist an at-most-once claim before a one-time task invokes Codex.
+- Attempt to disable a one-time timer as soon as its only attempt is claimed, preserving the real systemd exit code on failure.
+- Suppress repeated service activation without invoking Codex while leaving daily and weekly schedules recurring.
+- Add runner and real user-systemd regression coverage for duplicate activation.
+
+## 0.1.0-beta.2 (superseded before release)
 
 - Add CI, release validation, evaluation cases, privacy documentation, and a public-release checklist.
 - Keep explicit `--state-dir` runs isolated instead of importing legacy user data.

@@ -42,6 +42,7 @@ class RunnerIntegrationTests(unittest.TestCase):
         assert bash is not None
         shutil.copy2(bash, self.pane_codex)
         self.fake_codex_log = self.root / "fake-codex.jsonl"
+        self.fake_systemctl_log = self.root / "fake-systemctl.jsonl"
         self.original_state_dir = delay_execute.STATE_DIR
         self.original_systemd_dir = delay_execute.SYSTEMD_DIR
         self.addCleanup(delay_execute.configure_state_dir, self.original_state_dir)
@@ -50,6 +51,7 @@ class RunnerIntegrationTests(unittest.TestCase):
         delay_execute.SYSTEMD_DIR = self.systemd_dir
         delay_execute.ensure_directories()
         self._write_fake_codex()
+        self._write_fake_systemctl()
         self.tmux_labels = []
         self.addCleanup(self._stop_tmux_servers)
 
@@ -78,6 +80,25 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
             encoding="utf-8",
         )
         fake_codex.chmod(0o700)
+
+    def _write_fake_systemctl(self):
+        fake_systemctl = self.bin_dir / "systemctl"
+        fake_systemctl.write_text(
+            """#!/usr/bin/env python3
+import json
+import os
+import sys
+from pathlib import Path
+
+log = Path(os.environ["DELAY_EXECUTE_FAKE_SYSTEMCTL_LOG"])
+with log.open("a", encoding="utf-8") as stream:
+    stream.write(json.dumps(sys.argv[1:]) + "\\n")
+if os.environ.get("DELAY_EXECUTE_FAKE_SYSTEMCTL_MODE") == "failure":
+    raise SystemExit(7)
+""",
+            encoding="utf-8",
+        )
+        fake_systemctl.chmod(0o700)
 
     def _stop_tmux_servers(self):
         for label in self.tmux_labels:
@@ -167,15 +188,17 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
             time.sleep(0.05)
         self.fail("tmux pane did not render the expected prompt")
 
-    def _create_runner(self, attachment, prompt="integration-test"):
+    def _create_runner(self, attachment, prompt="integration-test", schedule_type="once"):
         identifier = f"integration-{uuid.uuid4().hex}"
         record = {
             "id": identifier,
             "cwd": str(self.root),
             "session_id": "integration-session",
             "prompt": prompt,
+            "schedule_type": schedule_type,
             "execution_mode": "non_git",
             "attachment": attachment,
+            "status": "scheduled",
             "runtime_status": "queued",
         }
         delay_execute.write_json(delay_execute.TASK_DIR / f"{identifier}.json", record)
@@ -188,10 +211,20 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
             runner = delay_execute.write_runner(record)
         return identifier, runner, environment
 
-    def _run_runner(self, runner, environment, *, mode="success", timeout=10):
+    def _run_runner(
+        self,
+        runner,
+        environment,
+        *,
+        mode="success",
+        systemctl_mode="success",
+        timeout=10,
+    ):
         environment = environment.copy()
         environment["DELAY_EXECUTE_FAKE_CODEX_LOG"] = str(self.fake_codex_log)
         environment["DELAY_EXECUTE_FAKE_CODEX_MODE"] = mode
+        environment["DELAY_EXECUTE_FAKE_SYSTEMCTL_LOG"] = str(self.fake_systemctl_log)
+        environment["DELAY_EXECUTE_FAKE_SYSTEMCTL_MODE"] = systemctl_mode
         return subprocess.run(
             [str(runner)],
             text=True,
@@ -267,6 +300,78 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         self.assertNotIn(
             "detached_running", [event["event"] for event in self._history_events()]
         )
+
+    def test_one_time_runner_suppresses_a_second_invocation(self):
+        identifier, runner, environment = self._create_runner(None)
+
+        first = self._run_runner(runner, environment)
+        second = self._run_runner(runner, environment)
+
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(len(invocations), 1)
+        self.assertEqual(self._record(identifier)["attempt_count"], 1)
+        self.assertEqual(self._record(identifier)["status"], "attempted")
+        systemctl_invocations = [
+            json.loads(line)
+            for line in self.fake_systemctl_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(
+            systemctl_invocations,
+            [
+                [
+                    "--user",
+                    "disable",
+                    "--now",
+                    f"codex-delay-execute-{identifier}.timer",
+                ]
+            ],
+        )
+        self.assertIn(
+            "duplicate_suppressed",
+            [event["event"] for event in self._history_events()],
+        )
+
+    def test_recurring_runner_allows_later_invocations(self):
+        identifier, runner, environment = self._create_runner(
+            None, schedule_type="daily"
+        )
+
+        first = self._run_runner(runner, environment)
+        second = self._run_runner(runner, environment)
+
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(len(invocations), 2)
+        self.assertEqual(self._record(identifier)["attempt_count"], 2)
+        self.assertEqual(self._record(identifier)["status"], "scheduled")
+        self.assertFalse(self.fake_systemctl_log.exists())
+        self.assertNotIn(
+            "duplicate_suppressed",
+            [event["event"] for event in self._history_events()],
+        )
+
+    def test_timer_disarm_failure_preserves_the_real_exit_code(self):
+        identifier, runner, environment = self._create_runner(None)
+
+        result = self._run_runner(runner, environment, systemctl_mode="failure")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        failures = [
+            event
+            for event in self._history_events()
+            if event["event"] == "timer_disarm_failed"
+        ]
+        self.assertEqual(failures[0]["exit_code"], 7)
+        self.assertEqual(self._record(identifier)["attempt_count"], 1)
 
     def test_missing_tmux_pane_runs_one_detached_attempt(self):
         attachment = self._start_tmux_pane()

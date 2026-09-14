@@ -1,6 +1,6 @@
 # Delay Execute
 
-> Beta 候选版本：`0.1.0-beta.2`。需要支持用户级 systemd 的 Linux。
+> Beta 候选版本：`0.1.0-beta.3`。需要支持用户级 systemd 的 Linux。
 
 Delay Execute 是一个面向 Linux Codex CLI 的延时任务插件。它可以在用户明确确认后，于指定时间把提示词提交到当前对话。
 
@@ -77,10 +77,11 @@ $delay-execute confirm-cancel <任务ID>
 - 非 Git 目录：增加 `--skip-git-repo-check`，但不会绕过认证、hook 信任、sandbox、配额或审批策略。
 - detached 模式遇到会话 writer 冲突：记录为 `blocked_by_active_session`，不无限重启。
 - 终态失败：记录失败，不自动重试。
+- 一次性任务会在调用 Codex 前持久化认领唯一一次尝试，并立即尝试停用 timer。停用失败会保留真实 systemd 退出码，而持久化认领仍会阻止后续激活再次调用 Codex。无重试策略优先防止重复执行；如果主机在认领后、投递前故障，任务可能不会送达。
 
 如果 `codex` 指向 Codex HUD shim，生成的 runner 会自动通过 `--no-hud --` 调用原生 CLI，使无 TTY 的 systemd 服务也能使用 queue。
 
-新任务的运行状态包括 `queued`、`queued_to_session`、`detached_running`、`completed`、`blocked_by_active_session` 和 `failed`；`queued_to_session` 表示 Codex 已接受消息，不代表忙碌中的上一轮和排队消息都已处理完成。旧任务记录仍可能包含 `waiting_for_idle` 或 `injected`。使用 `$delay-execute list` 查看；任务记录会包含实际 runner、日志、历史记录和数据目录。
+新任务的运行状态包括 `claimed`、`queued`、`queued_to_session`、`detached_running`、`completed`、`blocked_by_active_session` 和 `failed`；`queued_to_session` 表示 Codex 已接受消息，不代表忙碌中的上一轮和排队消息都已处理完成。旧任务记录仍可能包含 `waiting_for_idle` 或 `injected`。使用 `$delay-execute list` 查看；任务记录会包含实际 runner、日志、历史记录和数据目录。
 
 ## 已知边界
 
