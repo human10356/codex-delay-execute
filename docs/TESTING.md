@@ -27,9 +27,9 @@ On 2026-09-14, the release candidate was tested on Linux with Codex CLI 0.154.0,
 
 The machine had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified, but a physical logout/reboot was deliberately not performed because it would interrupt the testing session. That final operational scenario remains distinct from automated coverage.
 
-## Private Git installation
+## Git installation
 
-The testing machine must already be able to clone the private repository. Install the tagged marketplace and plugin:
+Install the tagged marketplace and plugin. A private source requires matching Git credentials; a public source does not:
 
 ```bash
 codex plugin marketplace add <private-git-url> --ref <release-tag>

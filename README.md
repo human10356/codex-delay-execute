@@ -1,24 +1,22 @@
 # Delay Execute Marketplace
 
-Private beta marketplace for the Linux-only Delay Execute plugin for Codex CLI.
+Beta marketplace for the Linux-only Delay Execute plugin for Codex CLI.
 
-The source tree contains the `0.1.0-beta.2` release candidate. The repository remains private while the manual Linux E2E checklist is being completed.
+The source tree contains the `0.1.0-beta.2` release candidate.
 
-## Private beta installation
-
-The current repository is private, so Git must already be able to authenticate to GitHub before Codex can add it as a marketplace source.
-
-Using SSH:
-
-```bash
-codex plugin marketplace add git@github.com:human10356/delay-execute-marketplace.git --ref main
-codex plugin add delay-execute@delay-execute-marketplace
-```
+## Installation
 
 Using HTTPS:
 
 ```bash
 codex plugin marketplace add https://github.com/human10356/delay-execute-marketplace.git --ref main
+codex plugin add delay-execute@delay-execute-marketplace
+```
+
+Using SSH, including for a private fork when local Git credentials permit access:
+
+```bash
+codex plugin marketplace add git@github.com:human10356/delay-execute-marketplace.git --ref main
 codex plugin add delay-execute@delay-execute-marketplace
 ```
 
