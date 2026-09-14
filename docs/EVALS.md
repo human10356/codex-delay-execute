@@ -42,9 +42,9 @@ These cases are written so another tester can evaluate the plugin without intern
 ### 6. Session-attached delivery
 
 - User prompt: A previously confirmed task becomes due.
-- Setup: The original tmux pane still exists and reaches the standard idle Codex prompt.
-- Expected workflow: Wait for idle, paste the stored prompt, and press Enter in the captured pane.
-- Expected result: Runtime state becomes `injected`; no detached writer is launched.
+- Setup: The original tmux pane and Codex process still exist; Codex may be idle or working.
+- Expected workflow: Submit the stored prompt with `codex queue` for the captured session ID without sending terminal keystrokes.
+- Expected result: Runtime state becomes `queued_to_session`; no detached writer is launched. This state means Codex accepted the message, not that a busy turn has already finished processing it.
 
 ## Negative cases
 
@@ -73,12 +73,12 @@ These cases are written so another tester can evaluate the plugin without intern
 - Reason: Starting or repeatedly restarting another writer could lock the session.
 - Expected behavior: Record `blocked_by_active_session`, stop without automatic restart, and preserve diagnostic logs.
 
-### 5. Shell resembles an idle Codex pane
+### 5. Shell occupies the captured pane
 
 - User prompt: A previously confirmed task becomes due.
-- Setup: The original tmux pane has returned to a shell whose visible history still contains the standard Codex idle prompt.
-- Reason: Screen text alone must not authorize terminal input.
-- Expected behavior: Reject session-attached injection and make one detached resume attempt.
+- Setup: The original tmux pane now contains a shell instead of the captured native Codex process.
+- Reason: A pane ID alone must not authorize session delivery.
+- Expected behavior: Reject attached queue delivery and make one detached resume attempt without sending terminal input.
 
 ### 6. Unsupported explicit date or relative duration
 

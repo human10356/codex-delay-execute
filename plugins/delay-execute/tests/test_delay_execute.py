@@ -23,6 +23,24 @@ CAPTURE_SCRIPT = Path(__file__).parents[1] / "scripts" / "capture_context.py"
 
 
 class ExecutionModeTests(unittest.TestCase):
+    def test_codex_hud_prefix_disables_the_tty_wrapper(self):
+        help_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="Codex HUD\nUsage: codex-hud", stderr=""
+        )
+        with patch.object(delay_execute.subprocess, "run", return_value=help_result):
+            prefix = delay_execute.codex_command_prefix("/usr/local/bin/codex")
+
+        self.assertEqual(prefix, ["/usr/local/bin/codex", "--no-hud", "--"])
+
+    def test_native_codex_prefix_is_unchanged(self):
+        help_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="Codex CLI\nUsage: codex", stderr=""
+        )
+        with patch.object(delay_execute.subprocess, "run", return_value=help_result):
+            prefix = delay_execute.codex_command_prefix("/usr/local/bin/codex")
+
+        self.assertEqual(prefix, ["/usr/local/bin/codex"])
+
     def test_next_run_preserves_named_timezone_across_dst_change(self):
         now = dt.datetime(2026, 10, 31, 23, 30, tzinfo=ZoneInfo("America/New_York"))
 
@@ -185,6 +203,21 @@ class ExecutionModeTests(unittest.TestCase):
             ],
         )
 
+    def test_attached_delivery_uses_the_official_session_queue(self):
+        self.assertEqual(
+            delay_execute.queue_command_parts(
+                "codex", {"session_id": "session", "prompt": "continue"}
+            ),
+            [
+                "codex",
+                "queue",
+                "--thread",
+                "session",
+                "--message",
+                "continue",
+            ],
+        )
+
     def test_tty_attachment_uses_the_current_tmux_pane(self):
         identity = {
             "pane_pid": "123",
@@ -254,7 +287,7 @@ class ExecutionModeTests(unittest.TestCase):
 
         self.assertEqual(start_ticks, "999")
 
-    def test_runner_waits_for_idle_and_does_not_configure_systemd_restart(self):
+    def test_runner_uses_queue_without_terminal_input_or_systemd_restart(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             record = {
@@ -280,24 +313,24 @@ class ExecutionModeTests(unittest.TestCase):
                 delay_execute, "HISTORY_FILE", root / "history.jsonl"
             ), patch.object(delay_execute, "SYSTEMD_DIR", root / "systemd"), patch.object(
                 delay_execute.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}"
+            ), patch.object(
+                delay_execute,
+                "codex_command_prefix",
+                side_effect=lambda codex: [codex],
             ), patch.object(delay_execute, "execution_mode", return_value="non_git"):
                 runner = delay_execute.write_runner(record)
                 content = runner.read_text(encoding="utf-8")
                 syntax = subprocess.run(["bash", "-n", str(runner)], capture_output=True)
         self.assertEqual(syntax.returncode, 0, syntax.stderr.decode())
-        self.assertIn("paste-buffer -d -t %9", content)
+        self.assertIn("queue --thread session --message continue", content)
         self.assertIn("umask 077", content)
-        paste = content.index("paste-buffer -d -t %9")
-        settle = content.index("sleep 2", paste)
-        submit = content.index("send-keys -t %9 Enter", paste)
-        final_identity_check = content.index("if ! original_codex_is_attached", settle)
-        self.assertLess(paste, settle)
-        self.assertLess(settle, final_identity_check)
-        self.assertLess(final_identity_check, submit)
+        self.assertNotIn("paste-buffer", content)
+        self.assertNotIn("send-keys", content)
+        self.assertNotIn("capture-pane", content)
         self.assertIn("already has an active writer", content)
         self.assertIn(str(root / "tasks" / "delay_execute_runtime.py"), content)
         self.assertIn(f"--state-dir {root} transition", content)
-        self.assertIn("grep -q 'Working ('", content)
+        self.assertIn("queue_failed", content)
 
     def test_install_creates_a_non_restarting_service(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -320,6 +353,10 @@ class ExecutionModeTests(unittest.TestCase):
                 delay_execute, "HISTORY_FILE", root / "history.jsonl"
             ), patch.object(delay_execute, "SYSTEMD_DIR", root / "systemd"), patch.object(
                 delay_execute.shutil, "which", return_value="/usr/bin/codex"
+            ), patch.object(
+                delay_execute,
+                "codex_command_prefix",
+                side_effect=lambda codex: [codex],
             ), patch.object(delay_execute, "execution_mode", return_value="non_git"), patch.object(
                 delay_execute, "systemctl"
             ):
@@ -361,6 +398,10 @@ class ExecutionModeTests(unittest.TestCase):
             ), patch.object(delay_execute, "HISTORY_FILE", root / "history.jsonl"), patch.object(
                 delay_execute, "SYSTEMD_DIR", root / "systemd"
             ), patch.object(delay_execute.shutil, "which", return_value="/usr/bin/codex"), patch.object(
+                delay_execute,
+                "codex_command_prefix",
+                side_effect=lambda codex: [codex],
+            ), patch.object(
                 delay_execute, "execution_mode", return_value="non_git"
             ), patch.object(delay_execute, "systemctl"):
                 delay_execute.ensure_directories()

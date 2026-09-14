@@ -23,7 +23,7 @@
       "interface": {
         "displayName": "Delay Execute",
         "shortDescription": "Resume this Codex chat at a confirmed future time.",
-        "longDescription": "Schedules confirmed prompts for an existing Codex CLI conversation, preferring safe delivery through the original tmux pane and supporting Git and non-Git directories.",
+        "longDescription": "Schedules confirmed prompts for an existing Codex CLI conversation, preferring the official session queue and supporting Git and non-Git directories.",
         "developerName": "human10356",
         "category": "Productivity",
         "capabilities": [

@@ -19,9 +19,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 APP = "codex-delay-execute"
 SYSTEMD_DIR = Path.home() / ".config" / "systemd" / "user"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
-IDLE_POLL_SECONDS = 15
-IDLE_WAIT_SECONDS = 60 * 60
-TMUX_SUBMIT_SETTLE_SECONDS = 2
 
 
 def default_state_dir(environ: dict[str, str] | None = None) -> Path:
@@ -329,6 +326,7 @@ def transition_task(identifier: str, status: str) -> None:
     allowed = {
         "queued",
         "waiting_for_idle",
+        "queued_to_session",
         "injected",
         "detached_running",
         "completed",
@@ -364,14 +362,45 @@ def execution_mode(cwd: Path) -> str:
     return "non_git"
 
 
-def resume_command_parts(codex: str, record: dict, mode: str) -> list[str]:
-    command_parts = [codex, "exec", "resume"]
+def codex_command_prefix(codex: str) -> list[str]:
+    try:
+        result = subprocess.run(
+            [codex, "--help"],
+            text=True,
+            capture_output=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return [codex]
+    help_text = result.stdout + result.stderr
+    if "Codex HUD" in help_text and "codex-hud" in help_text:
+        return [codex, "--no-hud", "--"]
+    return [codex]
+
+
+def normalize_command_prefix(codex: str | list[str]) -> list[str]:
+    return [codex] if isinstance(codex, str) else list(codex)
+
+
+def resume_command_parts(codex: str | list[str], record: dict, mode: str) -> list[str]:
+    command_parts = [*normalize_command_prefix(codex), "exec", "resume"]
     if mode in {"non_git", "trusted_non_git"}:
         command_parts.append("--skip-git-repo-check")
     elif mode != "git":
         fail(f"不支持的执行模式: {mode}")
     command_parts.extend((record["session_id"], record["prompt"]))
     return command_parts
+
+
+def queue_command_parts(codex: str | list[str], record: dict) -> list[str]:
+    return [
+        *normalize_command_prefix(codex),
+        "queue",
+        "--thread",
+        record["session_id"],
+        "--message",
+        record["prompt"],
+    ]
 
 
 def command_stage(args: argparse.Namespace) -> None:
@@ -393,7 +422,6 @@ def command_stage(args: argparse.Namespace) -> None:
         "schedule_type": schedule_type,
         "calendar": calendar,
         "next_run": next_run.isoformat(),
-        "idle_wait_minutes": IDLE_WAIT_SECONDS // 60,
         "retry_policy": "none",
         "execution_mode": mode,
         "attachment": attachment,
@@ -411,6 +439,7 @@ def write_runner(record: dict) -> Path:
     codex = shutil.which("codex")
     if not codex:
         fail("找不到 codex 命令；请确认 systemd 用户环境中可用的 PATH")
+    codex_prefix = codex_command_prefix(codex)
     identifier = record["id"]
     runner = TASK_DIR / f"run-{identifier}.sh"
     log_file = LOG_DIR / f"{identifier}.log"
@@ -421,8 +450,11 @@ def write_runner(record: dict) -> Path:
         mode = current_mode
     elif mode != current_mode:
         fail("工作目录的 Git 状态已改变；请重新暂存并确认任务")
-    command_parts = resume_command_parts(codex, record, mode)
+    command_parts = resume_command_parts(codex_prefix, record, mode)
     command = " ".join(shlex.quote(part) for part in command_parts)
+    queue_command = " ".join(
+        shlex.quote(part) for part in queue_command_parts(codex_prefix, record)
+    )
     script = shlex.quote(str(runtime_script_path()))
     state_dir = shlex.quote(str(STATE_DIR))
     attachment = record.get("attachment") or {}
@@ -491,6 +523,20 @@ run_detached() {{
   record_event failed "$status"
   return "$status"
 }}
+run_attached_queue() {{
+  transition queued_to_session
+  record_event queued_to_session 0
+  set +e
+  timeout --foreground 1m {queue_command} >> {shlex.quote(str(log_file))} 2>&1
+  status=$?
+  set -e
+  if [ "$status" -eq 0 ]; then
+    record_event queue_accepted 0
+    return 0
+  fi
+  record_event queue_failed "$status"
+  run_detached
+}}
 original_codex_is_attached() {{
   [ -n {expected_pane_pid} ] && [ -n {expected_pane_tty} ] && [ -n {expected_codex_pid} ] && \
     [ -n {expected_codex_start_ticks} ] || return 1
@@ -508,45 +554,11 @@ original_codex_is_attached() {{
     awk -v expected={expected_codex_pid} '$1 == expected && $2 == "codex" {{ found=1 }} END {{ exit !found }}'
 }}
 if [ -n {shlex.quote(tmux_server)} ] && [ -n {shlex.quote(tmux_pane)} ]; then
-  transition waiting_for_idle
-  record_event waiting_for_idle 0
-  deadline=$(( $(date +%s) + {IDLE_WAIT_SECONDS} ))
-  while [ "$(date +%s)" -lt "$deadline" ]; do
-    if ! original_codex_is_attached; then
-      record_event attachment_unavailable 0
-      run_detached
-      exit $?
-    fi
-    if ! pane_snapshot=$(tmux -S {tmux_server} capture-pane -p -t {tmux_pane} -S -8 2>/dev/null); then
-      record_event attachment_unavailable 0
-      run_detached
-      exit $?
-    fi
-    if printf '%s\n' "$pane_snapshot" | tail -n 8 | grep -q 'Ask Codex to do anything' && \
-       ! printf '%s\n' "$pane_snapshot" | tail -n 8 | grep -q 'Working ('; then
-      if ! original_codex_is_attached; then
-        record_event attachment_unavailable 0
-        run_detached
-        exit $?
-      fi
-      tmux -S {tmux_server} set-buffer -- {shlex.quote(record['prompt'])}
-      tmux -S {tmux_server} paste-buffer -d -t {tmux_pane}
-      sleep {TMUX_SUBMIT_SETTLE_SECONDS}
-      if ! original_codex_is_attached; then
-        record_event attachment_unavailable 0
-        run_detached
-        exit $?
-      fi
-      tmux -S {tmux_server} send-keys -t {tmux_pane} Enter
-      transition injected
-      record_event injected 0
-      exit 0
-    fi
-    sleep {IDLE_POLL_SECONDS}
-  done
-  transition blocked_by_active_session
-  record_event blocked_by_active_session 0
-  exit 0
+  if original_codex_is_attached; then
+    run_attached_queue
+    exit $?
+  fi
+  record_event attachment_unavailable 0
 fi
 run_detached
 """

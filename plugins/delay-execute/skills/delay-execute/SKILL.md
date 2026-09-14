@@ -5,7 +5,7 @@ description: "Schedule a confirmed one-time, daily, or weekly prompt that resume
 
 # Delay Execute
 
-Use this skill only for local Linux Codex CLI sessions. It stages a task first and installs a user-level systemd timer only after explicit confirmation. When launched from tmux, a due task waits for the captured Codex pane to become idle, then submits the prompt through that pane. If the pane is gone, it falls back to a detached `codex exec resume`. Runtime states are recorded in Codex's writable plugin-data directory.
+Use this skill only for local Linux Codex CLI sessions. It stages a task first and installs a user-level systemd timer only after explicit confirmation. When launched from tmux, a due task verifies the captured Codex process and submits the prompt through the official `codex queue` command. If the pane is gone or queueing fails, it makes one detached `codex exec resume` attempt. Runtime states are recorded in Codex's writable plugin-data directory.
 
 ## Invocation
 
@@ -30,7 +30,7 @@ The active-session hook supplies a JSON object containing exact `session_id`, `c
 
    `python3 "<helper_path>" --state-dir "<state_dir>" --import-legacy-state stage --session-id <session_id> --cwd <cwd> --at <HH:MM> --prompt <prompt>`
 
-3. Read the JSON response and show a confirmation preview. It must include task ID, schedule type, exact next local execution time including date and timezone, current working directory, exact prompt, execution mode, delivery mode, and delivery policy. State that no timer has been created yet. For `non_git`, explain that the confirmed runner will use `--skip-git-repo-check` for the captured working directory. For a tmux-attached task, explain that it waits up to one hour for the original pane to be idle instead of opening a second session writer. It does not retry automatically after a terminal failure.
+3. Read the JSON response and show a confirmation preview. It must include task ID, schedule type, exact next local execution time including date and timezone, current working directory, exact prompt, execution mode, delivery mode, and delivery policy. State that no timer has been created yet. For `non_git`, explain that the confirmed runner will use `--skip-git-repo-check` for the captured working directory. For a tmux-attached task, explain that it uses `codex queue` for the original verified session instead of opening a second session writer; if that is unavailable, it makes one detached attempt. It does not retry automatically after a terminal failure.
 4. Ask the user to reply exactly: `$delay-execute confirm <任务ID>`.
 
 Do not install, enable, or modify a systemd timer during staging.

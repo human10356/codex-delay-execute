@@ -65,6 +65,12 @@ from pathlib import Path
 log = Path(os.environ["DELAY_EXECUTE_FAKE_CODEX_LOG"])
 with log.open("a", encoding="utf-8") as stream:
     stream.write(json.dumps(sys.argv[1:]) + "\\n")
+if (
+    os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "queue_failure"
+    and sys.argv[1:2] == ["queue"]
+):
+    print("queue unavailable", file=sys.stderr)
+    raise SystemExit(2)
 if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
     print("conversation already has an active writer", file=sys.stderr)
     raise SystemExit(1)
@@ -176,7 +182,9 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         delay_execute.install_runtime()
         environment = os.environ.copy()
         environment["PATH"] = f"{self.bin_dir}{os.pathsep}{environment['PATH']}"
-        with patch.dict(os.environ, environment, clear=True):
+        with patch.dict(os.environ, environment, clear=True), patch.object(
+            delay_execute, "codex_command_prefix", side_effect=lambda codex: [codex]
+        ):
             runner = delay_execute.write_runner(record)
         return identifier, runner, environment
 
@@ -203,44 +211,59 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
             for line in delay_execute.HISTORY_FILE.read_text(encoding="utf-8").splitlines()
         ]
 
-    def test_idle_tmux_pane_receives_prompt_without_detached_writer(self):
+    def test_idle_tmux_pane_queues_without_terminal_input(self):
         attachment = self._start_tmux_pane()
-        injected_marker = self.root / "injected"
-        prompt = f"printf injected-ok > {shlex.quote(str(injected_marker))}"
+        prompt = "queued-through-official-api"
         identifier, runner, environment = self._create_runner(attachment, prompt)
 
         result = self._run_runner(runner, environment)
-        for _ in range(50):
-            if injected_marker.exists():
-                break
-            time.sleep(0.05)
+        snapshot = subprocess.run(
+            [
+                "tmux",
+                "-S",
+                attachment["server"],
+                "capture-pane",
+                "-p",
+                "-t",
+                attachment["pane"],
+                "-S",
+                "-8",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(injected_marker.read_text(encoding="utf-8"), "injected-ok")
-        self.assertFalse(self.fake_codex_log.exists())
-        self.assertEqual(self._record(identifier)["runtime_status"], "injected")
+        self.assertNotIn(prompt, snapshot)
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(
+            invocations,
+            [["queue", "--thread", "integration-session", "--message", prompt]],
+        )
+        self.assertEqual(self._record(identifier)["runtime_status"], "queued_to_session")
         self.assertEqual(stat.S_IMODE(delay_execute.HISTORY_FILE.stat().st_mode), 0o600)
         self.assertEqual(
             stat.S_IMODE((delay_execute.LOG_DIR / f"{identifier}.log").stat().st_mode),
             0o600,
         )
 
-    def test_busy_tmux_pane_does_not_start_detached_writer(self):
+    def test_busy_tmux_pane_queues_without_starting_detached_writer(self):
         attachment = self._start_tmux_pane(busy=True)
         identifier, runner, environment = self._create_runner(attachment)
-        environment["DELAY_EXECUTE_FAKE_CODEX_LOG"] = str(self.fake_codex_log)
-        environment["DELAY_EXECUTE_FAKE_CODEX_MODE"] = "success"
 
-        result = subprocess.run(
-            ["timeout", "2", str(runner)],
-            text=True,
-            capture_output=True,
-            env=environment,
-        )
+        result = self._run_runner(runner, environment)
 
-        self.assertEqual(result.returncode, 124, result.stderr)
-        self.assertFalse(self.fake_codex_log.exists())
-        self.assertEqual(self._record(identifier)["runtime_status"], "waiting_for_idle")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(invocations[0][0], "queue")
+        self.assertEqual(self._record(identifier)["runtime_status"], "queued_to_session")
         self.assertNotIn(
             "detached_running", [event["event"] for event in self._history_events()]
         )
@@ -264,6 +287,24 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         self.assertEqual(len(invocations), 1)
         self.assertEqual(invocations[0][:2], ["exec", "resume"])
         self.assertEqual(self._record(identifier)["runtime_status"], "completed")
+
+    def test_queue_failure_runs_one_detached_attempt(self):
+        attachment = self._start_tmux_pane()
+        identifier, runner, environment = self._create_runner(attachment)
+
+        result = self._run_runner(runner, environment, mode="queue_failure")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual([invocation[0] for invocation in invocations], ["queue", "exec"])
+        self.assertEqual(self._record(identifier)["runtime_status"], "completed")
+        self.assertEqual(
+            [event["event"] for event in self._history_events()].count("queue_failed"),
+            1,
+        )
 
     def test_shell_with_codex_prompt_is_never_injected(self):
         attachment = self._start_tmux_pane(codex_process=False)

@@ -12,14 +12,16 @@ python3 -m unittest discover -s plugins/delay-execute/tests -v
 
 CI runs the same checks on Linux with Python 3.10, 3.12, and 3.14.
 
-The test suite includes runner integration tests backed by real tmux, `flock`, and GNU `timeout` processes. A controlled fake `codex` executable is used only for the detached-resume boundary, so CI never writes to a real conversation.
+The test suite includes runner integration tests backed by real tmux, `flock`, and GNU `timeout` processes. A controlled fake `codex` executable covers both the queue and detached-resume command boundaries, so CI never writes to a real conversation.
 
 ## Completed Linux verification
 
 On 2026-09-14, the release candidate was tested on Linux with Codex CLI 0.154.0, Python 3.12, systemd 255, and tmux 3.4.
 
 - Future one-time, daily, and weekly tasks were staged and installed from a non-Git `/tmp` directory with isolated state. Each real user timer became active, declared `Persistent=true`, and used a service without `Restart=`. The plugin and systemd calculated the same next run, to the second.
-- An idle real Codex tmux pane received and executed the delayed prompt. A busy pane remained in `waiting_for_idle` and did not start a detached writer.
+- A disposable real Codex session accepted and executed messages through `codex queue` while its TUI was idle. The installed HUD shim forwarded the same command successfully. Queueing while the TUI was closed persisted the message, which executed when the session was resumed.
+- A generated production runner executed under a real transient `systemd --user` service, automatically bypassed the TTY-dependent Codex HUD wrapper, queued the message, and recorded `queued_to_session` without detached execution.
+- Both idle and busy attached panes use the official session queue without starting a detached writer or sending terminal keystrokes.
 - Destroying the captured pane produced exactly one successful `codex exec resume`. A real writer conflict became the terminal `blocked_by_active_session` state without a retry.
 - A shell displaying a Codex-like idle prompt was rejected because its pane and native Codex process identities did not match.
 - Cancelling both queued and actively waiting tasks removed their units and processes. Expected SIGTERM cancellation left no failed unit and did not degrade the user manager.
@@ -48,10 +50,11 @@ Use disposable prompts and inspect `$delay-execute list`, task history, logs, an
 - [x] Confirm the task and verify its timer, service, runner, next-run timestamp, and plugin-data paths.
 - [x] Repeat staging and execution from a non-Git directory.
 - [x] Schedule daily and weekly tasks and verify their next-run calculations.
-- [x] In tmux, let the pane become idle and verify the prompt is injected into that pane.
-- [x] Keep the pane busy and verify no detached Codex writer starts.
+- [x] In tmux, let the pane become idle and verify `codex queue` delivers the prompt without terminal input.
+- [x] Keep the pane busy and verify the prompt is queued without starting a detached Codex writer.
+- [x] Execute a generated runner through `systemd --user` and verify Codex HUD is bypassed for non-TTY queue delivery.
 - [x] Destroy the captured pane and verify exactly one detached resume attempt occurs.
-- [x] Return the captured pane to a shell with Codex-like screen text and verify no terminal input is injected.
+- [x] Replace the captured Codex process with a shell and verify attached queue delivery is rejected without terminal input.
 - [x] Hold the conversation writer lock and verify the terminal state becomes `blocked_by_active_session` without automatic restart.
 - [x] Cancel queued and active tasks and verify their timer, service, and runner are stopped.
 - [x] Stop a persistent timer across its deadline and verify it runs immediately after reactivation.

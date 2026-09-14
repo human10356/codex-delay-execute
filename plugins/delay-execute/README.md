@@ -2,14 +2,14 @@
 
 > Beta release candidate: `0.1.0-beta.2`. Linux with user-level systemd is required.
 
-Delay Execute schedules a confirmed prompt for the current Codex CLI conversation on Linux. When the originating tmux pane is still available, the task waits for that pane to become idle and submits the prompt there. If the pane no longer exists, it falls back to `codex exec resume`.
+Delay Execute schedules a confirmed prompt for the current Codex CLI conversation on Linux. When the originating tmux pane and Codex process are still available, the task submits the prompt through the official `codex queue` command. If they are no longer available, it falls back to `codex exec resume`.
 
 The plugin is intended for users who want to continue the exact same CLI conversation later without keeping a second Codex writer alive.
 
 ## Requirements
 
 - Linux with a user-level systemd manager
-- Codex CLI available on `PATH`
+- Codex CLI available on `PATH`; attached delivery requires a version that provides `codex queue`
 - Python 3.10 or later
 - `flock` and GNU `timeout`
 - tmux, `ps`, and Linux procfs for session-attached delivery; detached fallback does not require them
@@ -69,15 +69,17 @@ Cancellation also stops a currently waiting service. Task installation and cance
 
 ## Delivery behavior
 
-Session-attached delivery records the tmux server socket, pane, terminal, and native Codex process IDs at staging time. When due, it polls for up to one hour and submits the prompt only when those identities still match and the Codex pane appears idle. It never sends a prompt to a shell or a replacement Codex process.
+Session-attached delivery records the tmux server socket, pane, terminal, and native Codex process IDs at staging time. When due, it queues the prompt only when those identities still match. The official Codex queue accepts the message whether the session is idle or working, and the runner never sends terminal keystrokes.
 
 If the captured pane has disappeared or its process identity has changed, the task runs a detached `codex exec resume`. Non-Git directories use `--skip-git-repo-check`; this bypasses only the repository preflight and does not bypass authentication, hook trust, sandboxing, quotas, or approval policy.
 
-Detached writer conflicts are recorded as `blocked_by_active_session`. Terminal failures are not automatically restarted, preventing an old task from indefinitely holding a conversation lock.
+If queueing fails, the task makes one detached resume attempt. Detached writer conflicts are recorded as `blocked_by_active_session`. Terminal failures are not automatically restarted, preventing an old task from indefinitely holding a conversation lock.
+
+When `codex` resolves to the Codex HUD shim, generated runners automatically use its `--no-hud --` pass-through so non-interactive systemd services invoke the native CLI without requiring a terminal.
 
 ## Runtime states and troubleshooting
 
-Task records use these runtime states: `queued`, `waiting_for_idle`, `injected`, `detached_running`, `completed`, `blocked_by_active_session`, and `failed`.
+New task records use these runtime states: `queued`, `queued_to_session`, `detached_running`, `completed`, `blocked_by_active_session`, and `failed`. `queued_to_session` means Codex accepted the attached message; it does not claim that a busy turn has already finished processing it. Legacy records can still contain `waiting_for_idle` or `injected`.
 
 Use `$delay-execute list` for the current state. The installed task record contains exact runner, log, history, and state-directory paths.
 
@@ -86,7 +88,7 @@ Common issues:
 - Missing active-session context: open `/hooks`, review and trust the plugin hook, then retry in a new thread.
 - `blocked_by_active_session`: another Codex process owns the conversation and detached delivery was not attempted again.
 - No run after logout: enable the user systemd manager to linger or keep the login session active.
-- Prompt never injected into an existing pane: the current idle detector targets the standard English Codex CLI prompt. A changed or localized UI can time out safely instead of injecting into an uncertain terminal state.
+- Prompt was not processed immediately: inspect the task log for a queue failure or detached writer conflict. Attached queue delivery requires a Codex CLI version that provides `codex queue`.
 
 Before uninstalling, cancel every scheduled task. Uninstalling the plugin removes its cache entry but intentionally does not stop user-level systemd timers or delete retained plugin data.
 

@@ -4,12 +4,12 @@
 
 Delay Execute 是一个面向 Linux Codex CLI 的延时任务插件。它可以在用户明确确认后，于指定时间把提示词提交到当前对话。
 
-如果创建任务时所在的 tmux 窗格仍然存在，插件会等待该 Codex 窗格空闲并从原窗口提交提示词，避免启动第二个会话写入器。如果原窗格已经关闭，才会降级执行 `codex exec resume`。
+如果创建任务时所在的 tmux 窗格及 Codex 进程仍然存在，插件会通过官方 `codex queue` 向原会话排队提示词，不启动第二个会话写入器。如果原窗格已经关闭，才会降级执行 `codex exec resume`。
 
 ## 环境要求
 
 - Linux 和用户级 systemd
-- 已加入 `PATH` 的 Codex CLI
+- 已加入 `PATH` 的 Codex CLI；原会话投递需要提供 `codex queue` 的版本
 - Python 3.10 或更高版本
 - `flock` 和 GNU `timeout`
 - 原会话投递需要 tmux、`ps` 和 Linux procfs；仅使用 detached 降级模式时不要求它们
@@ -69,17 +69,20 @@ $delay-execute confirm-cancel <任务ID>
 
 ## 执行规则
 
-- 原 tmux 窗格存在：记录并验证窗格、终端和原生 Codex 进程标识，最多等待一小时，在 Codex 界面被判断为空闲后提交提示词。
+- 原 tmux 窗格存在：记录并验证窗格、终端和原生 Codex 进程标识；身份匹配后使用官方 `codex queue`，无论会话空闲或工作中都由 Codex 自己排队，runner 不发送终端按键。
 - 原窗格不存在或进程身份已变化：降级为 detached `codex exec resume`，不会把提示词发送给 shell 或替换后的 Codex 会话。
+- `codex queue` 失败：记录失败并进行一次 detached 降级尝试。
 - 非 Git 目录：增加 `--skip-git-repo-check`，但不会绕过认证、hook 信任、sandbox、配额或审批策略。
 - detached 模式遇到会话 writer 冲突：记录为 `blocked_by_active_session`，不无限重启。
 - 终态失败：记录失败，不自动重试。
 
-运行状态包括 `queued`、`waiting_for_idle`、`injected`、`detached_running`、`completed`、`blocked_by_active_session` 和 `failed`。使用 `$delay-execute list` 查看；任务记录会包含实际 runner、日志、历史记录和数据目录。
+如果 `codex` 指向 Codex HUD shim，生成的 runner 会自动通过 `--no-hud --` 调用原生 CLI，使无 TTY 的 systemd 服务也能使用 queue。
+
+新任务的运行状态包括 `queued`、`queued_to_session`、`detached_running`、`completed`、`blocked_by_active_session` 和 `failed`；`queued_to_session` 表示 Codex 已接受消息，不代表忙碌中的上一轮和排队消息都已处理完成。旧任务记录仍可能包含 `waiting_for_idle` 或 `injected`。使用 `$delay-execute list` 查看；任务记录会包含实际 runner、日志、历史记录和数据目录。
 
 ## 已知边界
 
-当前空闲判断针对标准英文 Codex CLI 提示。界面文本被修改或本地化时，插件会安全超时，而不会向无法确认状态的终端强行注入内容。
+原会话投递依赖提供 `codex queue` 的 Codex CLI 版本；如果 queue 不可用或失败，会记录日志并尝试一次 detached 恢复。
 
 卸载插件前应取消所有已计划任务。卸载只移除插件缓存，不会自动停止用户级 systemd timer，也不会删除保留的插件数据。
 
