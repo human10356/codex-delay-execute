@@ -14,14 +14,14 @@
 - [x] Explicit test state directories do not import real legacy user state.
 - [x] Real user-level systemd accepts future one-time, daily, and weekly timers from a non-Git directory.
 - [x] Cancelling those smoke-test tasks removes their active timer and service units.
+- [x] Idle-pane delivery, busy-pane waiting, pane-loss fallback, and real writer-lock handling pass against Codex CLI 0.154.0.
+- [x] Cancelling an active runner is reported as a successful SIGTERM service exit and leaves no failed user unit.
+- [x] Private Git upgrade from `0.1.0-beta.1` to the `0.1.0-beta.2` candidate preserves plugin data; uninstall removes the cache and retains documented data.
+- [x] Real systemd next-run timestamps match plugin calculations for one-time, daily, and weekly schedules.
 - [x] The full Git history and staged release candidate are free of credential patterns and machine-specific paths.
 
 ## Required before making the repository public
 
-- [ ] Complete the manual Linux E2E matrix in `docs/TESTING.md`.
-- [ ] Verify session-attached delivery in an idle tmux pane.
-- [ ] Verify a busy pane never starts a second writer.
-- [ ] Verify pane disappearance produces one detached attempt without a restart loop.
 - [ ] Verify behavior after logout or reboot, with and without user lingering.
 - [ ] Change repository visibility to public.
 - [ ] Install from a clean Linux account without GitHub credentials.

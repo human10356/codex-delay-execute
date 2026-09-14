@@ -25,11 +25,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install Linux integration dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes tmux
+
       - name: Validate release structure
         run: python3 scripts/validate_release.py
 
       - name: Compile Python sources
         run: python3 -m py_compile plugins/delay-execute/scripts/*.py
 
-      - name: Run unit tests
+      - name: Run unit and runner integration tests
         run: python3 -m unittest discover -s plugins/delay-execute/tests -v

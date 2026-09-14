@@ -20,6 +20,7 @@ SYSTEMD_DIR = Path.home() / ".config" / "systemd" / "user"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 IDLE_POLL_SECONDS = 15
 IDLE_WAIT_SECONDS = 60 * 60
+TMUX_SUBMIT_SETTLE_SECONDS = 2
 
 
 def default_state_dir(environ: dict[str, str] | None = None) -> Path:
@@ -48,8 +49,10 @@ def fail(message: str) -> None:
 
 
 def ensure_directories() -> None:
-    for directory in (TASK_DIR, PENDING_DIR, LOG_DIR, SYSTEMD_DIR):
+    for directory in (TASK_DIR, PENDING_DIR, LOG_DIR):
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(directory, 0o700)
+    SYSTEMD_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
 def runtime_script_path() -> Path:
@@ -95,6 +98,7 @@ def migrate_legacy_state(legacy: Path | None = None) -> int:
             destination = destination_dir / source.name
             if not destination.exists():
                 shutil.copy2(source, destination)
+                os.chmod(destination, 0o600)
                 imported += 1
 
     legacy_history = legacy / "history.jsonl"
@@ -299,6 +303,7 @@ def write_runner(record: dict) -> Path:
     tmux_pane = shlex.quote(pane) if isinstance(pane, str) else ""
     content = f"""#!/usr/bin/env bash
 set -euo pipefail
+umask 077
 mkdir -p {shlex.quote(str(LOG_DIR))}
 exec 9>{shlex.quote(str(lock_file))}
 flock -n 9 || exit 0
@@ -360,6 +365,7 @@ if [ -n {shlex.quote(tmux_server)} ] && [ -n {shlex.quote(tmux_pane)} ]; then
        ! printf '%s\n' "$pane_snapshot" | tail -n 8 | grep -q 'Working ('; then
       tmux -S {tmux_server} set-buffer -- {shlex.quote(record['prompt'])}
       tmux -S {tmux_server} paste-buffer -d -t {tmux_pane}
+      sleep {TMUX_SUBMIT_SETTLE_SECONDS}
       tmux -S {tmux_server} send-keys -t {tmux_pane} Enter
       transition injected
       record_event injected 0
@@ -393,6 +399,7 @@ def command_install(args: argparse.Namespace) -> None:
         "[Unit]\nDescription=Deliver a confirmed Codex delayed task\n"
         "\n"
         "[Service]\nType=oneshot\n"
+        "SuccessExitStatus=SIGTERM\n"
         f"ExecStart={systemd_quote_argument(runner)}\n",
         encoding="utf-8",
     )

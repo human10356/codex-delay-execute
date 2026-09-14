@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -54,11 +55,17 @@ class ExecutionModeTests(unittest.TestCase):
                 imported_again = delay_execute.migrate_legacy_state(legacy)
                 task = (target / "tasks" / "old.json").read_text(encoding="utf-8")
                 history = (target / "history.jsonl").read_text(encoding="utf-8")
+                task_mode = stat.S_IMODE((target / "tasks" / "old.json").stat().st_mode)
+                log_mode = stat.S_IMODE((target / "logs" / "old.log").stat().st_mode)
+                history_mode = stat.S_IMODE((target / "history.jsonl").stat().st_mode)
                 runner_exists = (target / "tasks" / "run-old.sh").exists()
         self.assertEqual(imported, 3)
         self.assertEqual(imported_again, 0)
         self.assertIn('"id":"old"', task)
         self.assertIn('"event":"old"', history)
+        self.assertEqual(task_mode, 0o600)
+        self.assertEqual(log_mode, 0o600)
+        self.assertEqual(history_mode, 0o600)
         self.assertFalse(runner_exists)
 
     def test_legacy_state_is_not_imported_without_explicit_opt_in(self):
@@ -195,6 +202,12 @@ class ExecutionModeTests(unittest.TestCase):
                 syntax = subprocess.run(["bash", "-n", str(runner)], capture_output=True)
         self.assertEqual(syntax.returncode, 0, syntax.stderr.decode())
         self.assertIn("paste-buffer -d -t %9", content)
+        self.assertIn("umask 077", content)
+        paste = content.index("paste-buffer -d -t %9")
+        settle = content.index("sleep 2", paste)
+        submit = content.index("send-keys -t %9 Enter", paste)
+        self.assertLess(paste, settle)
+        self.assertLess(settle, submit)
         self.assertIn("already has an active writer", content)
         self.assertIn(str(root / "tasks" / "delay_execute_runtime.py"), content)
         self.assertIn(f"--state-dir {root} transition", content)
@@ -230,9 +243,15 @@ class ExecutionModeTests(unittest.TestCase):
                 service = (root / "systemd" / "codex-delay-execute-test-task.service").read_text(
                     encoding="utf-8"
                 )
+                timer = (root / "systemd" / "codex-delay-execute-test-task.timer").read_text(
+                    encoding="utf-8"
+                )
                 runtime = root / "tasks" / "delay_execute_runtime.py"
                 runtime_exists = runtime.is_file()
         self.assertNotIn("Restart=", service)
+        self.assertIn("SuccessExitStatus=SIGTERM", service)
+        self.assertIn("Persistent=true", timer)
+        self.assertIn("AccuracySec=1s", timer)
         self.assertTrue(runtime_exists)
 
     def test_systemd_exec_start_quotes_a_state_path_with_spaces(self):

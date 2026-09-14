@@ -4,6 +4,10 @@
 
 - Add CI, release validation, evaluation cases, privacy documentation, and a public-release checklist.
 - Keep explicit `--state-dir` runs isolated instead of importing legacy user data.
+- Exercise the generated runner against real tmux, `flock`, and `timeout` processes in CI.
+- Wait briefly between pasting a prompt and sending Enter so Codex CLI 0.154.0 submits it reliably.
+- Treat the expected SIGTERM from cancelling an active task as a successful systemd service exit.
+- Enforce user-only permissions on runner-created logs, history, and imported legacy state.
 
 ## 0.1.0-beta.1
 
