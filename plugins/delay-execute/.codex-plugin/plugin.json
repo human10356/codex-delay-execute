@@ -1,0 +1,36 @@
+{
+  "name": "delay-execute",
+  "version": "0.1.0-beta.1",
+  "description": "Schedule a confirmed prompt to resume the current Codex session on Linux.",
+  "author": {
+    "name": "human10356",
+    "url": "https://github.com/human10356"
+  },
+  "homepage": "https://github.com/human10356/delay-execute-marketplace/tree/main/plugins/delay-execute",
+  "repository": "https://github.com/human10356/delay-execute-marketplace",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "scheduling",
+    "systemd",
+    "linux",
+    "automation"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Delay Execute",
+    "shortDescription": "Resume this Codex chat at a confirmed future time.",
+    "longDescription": "Schedules confirmed prompts for an existing Codex CLI conversation, preferring safe delivery through the original tmux pane and supporting Git and non-Git directories.",
+    "developerName": "human10356",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "$delay-execute \u5728\u51cc\u6668 02:15 \u7ee7\u7eed\u7b2c\u4e94\u9636\u6bb5\u7684\u8bbe\u8ba1\u3001\u5f00\u53d1\u548c\u6d4b\u8bd5\u9a8c\u8bc1\u3002",
+      "$delay-execute list",
+      "$delay-execute cancel <\u4efb\u52a1\u7f16\u53f7>"
+    ]
+  }
+}

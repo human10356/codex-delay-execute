@@ -1,0 +1,17 @@
+{
+  "description": "Capture the active Codex session only when Delay Execute is invoked.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/capture_context.py\"",
+            "timeout": 5,
+            "statusMessage": "Capturing Delay Execute session context"
+          }
+        ]
+      }
+    ]
+  }
+}

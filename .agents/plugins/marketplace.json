@@ -1,0 +1,20 @@
+{
+  "name": "delay-execute-marketplace",
+  "interface": {
+    "displayName": "Delay Execute Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "delay-execute",
+      "source": {
+        "source": "local",
+        "path": "./plugins/delay-execute"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
