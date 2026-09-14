@@ -9,6 +9,10 @@
 - Treat the expected SIGTERM from cancelling an active task as a successful systemd service exit.
 - Enforce user-only permissions on runner-created logs, history, and imported legacy state.
 - Update repository metadata and installation URLs for the `codex-delay-execute` repository name.
+- Bind tmux delivery to the original pane and native Codex process identities so a shell cannot receive a delayed prompt.
+- Calculate next-run previews with an IANA system timezone across daylight-saving transitions.
+- Clarify the three schedule forms supported by the beta release.
+- Require tasks created by earlier beta builds to be cancelled and recreated so they use the hardened runner snapshot.
 
 ## 0.1.0-beta.1
 

@@ -12,7 +12,7 @@ The plugin is intended for users who want to continue the exact same CLI convers
 - Codex CLI available on `PATH`
 - Python 3.10 or later
 - `flock` and GNU `timeout`
-- tmux for session-attached delivery; detached fallback does not require tmux
+- tmux, `ps`, and Linux procfs for session-attached delivery; detached fallback does not require them
 
 The computer and the user's systemd manager must be running when a task becomes due. On systems that stop the user manager after logout, `loginctl enable-linger <user>` may be needed.
 
@@ -31,6 +31,8 @@ No username, source-checkout path, or fixed `~/.codex/plugins/cache/...` version
 On the first plugin command after upgrading from an older local build, task metadata, pending confirmations, logs, and history are imported once from `~/.local/state/codex-delay-execute`. Generated legacy runners are not copied because they can contain obsolete installation paths. Direct helper invocations and isolated test directories do not import legacy data unless explicitly requested.
 
 After installation or an update, start a new Codex thread so the current plugin skill and hook definition are loaded. Plugin hooks are not trusted automatically; review and trust the Delay Execute hook with `/hooks` before first use.
+
+Each confirmed task keeps a generated runner snapshot. After an update that changes delivery behavior, cancel and recreate existing tasks; upgrading the plugin does not rewrite already scheduled runners.
 
 ## Usage
 
@@ -53,6 +55,8 @@ $delay-execute 每天 09:00 汇总昨天的工作并继续
 $delay-execute 每周一 09:00 继续检查项目风险
 ```
 
+The beta accepts the next occurrence of a local `HH:MM`, a daily `HH:MM`, or a weekly weekday plus `HH:MM`. Explicit calendar dates and relative durations are not yet supported.
+
 List or cancel tasks:
 
 ```text
@@ -65,9 +69,9 @@ Cancellation also stops a currently waiting service. Task installation and cance
 
 ## Delivery behavior
 
-Session-attached delivery records the tmux server socket and pane ID at staging time. When due, it polls for up to one hour and submits the prompt only after the Codex pane appears idle. It never starts a second writer while that pane is available.
+Session-attached delivery records the tmux server socket, pane, terminal, and native Codex process IDs at staging time. When due, it polls for up to one hour and submits the prompt only when those identities still match and the Codex pane appears idle. It never sends a prompt to a shell or a replacement Codex process.
 
-If the captured pane has disappeared, the task runs a detached `codex exec resume`. Non-Git directories use `--skip-git-repo-check`; this bypasses only the repository preflight and does not bypass authentication, hook trust, sandboxing, quotas, or approval policy.
+If the captured pane has disappeared or its process identity has changed, the task runs a detached `codex exec resume`. Non-Git directories use `--skip-git-repo-check`; this bypasses only the repository preflight and does not bypass authentication, hook trust, sandboxing, quotas, or approval policy.
 
 Detached writer conflicts are recorded as `blocked_by_active_session`. Terminal failures are not automatically restarted, preventing an old task from indefinitely holding a conversation lock.
 
@@ -83,6 +87,8 @@ Common issues:
 - `blocked_by_active_session`: another Codex process owns the conversation and detached delivery was not attempted again.
 - No run after logout: enable the user systemd manager to linger or keep the login session active.
 - Prompt never injected into an existing pane: the current idle detector targets the standard English Codex CLI prompt. A changed or localized UI can time out safely instead of injecting into an uncertain terminal state.
+
+Before uninstalling, cancel every scheduled task. Uninstalling the plugin removes its cache entry but intentionally does not stop user-level systemd timers or delete retained plugin data.
 
 ## Security model
 

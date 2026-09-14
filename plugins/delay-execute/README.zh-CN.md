@@ -11,8 +11,8 @@ Delay Execute 是一个面向 Linux Codex CLI 的延时任务插件。它可以�
 - Linux 和用户级 systemd
 - 已加入 `PATH` 的 Codex CLI
 - Python 3.10 或更高版本
-- `flock`、GNU `timeout`
-- 原会话投递需要 tmux；仅使用 detached 降级模式时不要求 tmux
+- `flock` 和 GNU `timeout`
+- 原会话投递需要 tmux、`ps` 和 Linux procfs；仅使用 detached 降级模式时不要求它们
 
 任务到期时，电脑和用户级 systemd 管理器必须处于运行状态。如果注销后用户服务会停止，可能需要执行 `loginctl enable-linger <user>`。
 
@@ -31,6 +31,8 @@ Codex 会把插件安装到当前 Codex home（默认是 `~/.codex`）管理的�
 从旧版升级后，第一次执行插件命令时会把 `~/.local/state/codex-delay-execute` 中的任务元数据、待确认记录、日志和历史记录一次性导入新数据目录。旧 runner 可能包含过期安装路径，因此不会复制。直接调用 helper 或使用隔离测试目录时，除非显式请求，否则不会导入旧数据。
 
 安装或升级后，请新建 Codex 对话以加载新版 skill 和 hook。首次使用前需要通过 `/hooks` 审查并信任 Delay Execute hook；安装插件本身不会自动信任 hook。
+
+每个已确认任务都会保留一份生成时的 runner 快照。涉及投递行为的插件升级不会重写现有 runner，因此升级后需要取消并重新创建旧任务。
 
 ## 使用方式
 
@@ -53,6 +55,8 @@ $delay-execute 每天 09:00 汇总昨天的工作并继续
 $delay-execute 每周一 09:00 继续检查项目风险
 ```
 
+当前 Beta 只接受下一次本机 `HH:MM`、每日 `HH:MM`，或每周某日加 `HH:MM`。暂不支持显式日历日期和相对时长。
+
 任务管理：
 
 ```text
@@ -65,8 +69,8 @@ $delay-execute confirm-cancel <任务ID>
 
 ## 执行规则
 
-- 原 tmux 窗格存在：最多等待一小时，在 Codex 界面被判断为空闲后提交提示词。
-- 原窗格不存在：降级为 detached `codex exec resume`。
+- 原 tmux 窗格存在：记录并验证窗格、终端和原生 Codex 进程标识，最多等待一小时，在 Codex 界面被判断为空闲后提交提示词。
+- 原窗格不存在或进程身份已变化：降级为 detached `codex exec resume`，不会把提示词发送给 shell 或替换后的 Codex 会话。
 - 非 Git 目录：增加 `--skip-git-repo-check`，但不会绕过认证、hook 信任、sandbox、配额或审批策略。
 - detached 模式遇到会话 writer 冲突：记录为 `blocked_by_active_session`，不无限重启。
 - 终态失败：记录失败，不自动重试。
@@ -76,6 +80,8 @@ $delay-execute confirm-cancel <任务ID>
 ## 已知边界
 
 当前空闲判断针对标准英文 Codex CLI 提示。界面文本被修改或本地化时，插件会安全超时，而不会向无法确认状态的终端强行注入内容。
+
+卸载插件前应取消所有已计划任务。卸载只移除插件缓存，不会自动停止用户级 systemd timer，也不会删除保留的插件数据。
 
 目前不支持原生 Windows、macOS launchd、无 systemd 的 Linux，以及只在 GUI 环境中运行的计划任务。
 

@@ -2,7 +2,7 @@
 
 Delay Execute creates user-level systemd timers and later submits a stored prompt to an existing Codex CLI conversation. Review the bundled hook and scripts before trusting or installing the plugin.
 
-The plugin does not broaden Codex permissions, bypass approvals, or embed credentials. Prompts, session identifiers, runner scripts, and execution history are stored locally with user-only permissions in the Codex plugin-data directory.
+The plugin does not broaden Codex permissions, bypass approvals, or embed credentials. Prompts, session identifiers, runner scripts, and execution history are stored locally with user-only permissions in the Codex plugin-data directory. Session-attached delivery verifies the original tmux pane and native Codex process before sending input; otherwise it falls back to detached resume.
 
 Do not include secrets in delayed prompts. Unattended tasks can fail when network access, repository credentials, authentication, quotas, or interactive approval are required.
 

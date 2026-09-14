@@ -1,4 +1,4 @@
-# Delay Execute Marketplace
+# Codex Delay Execute
 
 Beta marketplace for the Linux-only Delay Execute plugin for Codex CLI.
 
@@ -22,12 +22,16 @@ codex plugin add delay-execute@delay-execute-marketplace
 
 Start a new Codex CLI thread after installation. Review and trust the bundled hook with `/hooks` before using Delay Execute for the first time.
 
+Before uninstalling, cancel every scheduled task. Installed user-level systemd timers and copied runners are intentionally independent of the plugin cache and are not removed by uninstalling the plugin.
+
 ## Update
 
 ```bash
 codex plugin marketplace upgrade delay-execute-marketplace
 codex plugin add delay-execute@delay-execute-marketplace
 ```
+
+After an update that changes delivery behavior, cancel and recreate existing tasks. Each confirmed task has its own runner snapshot, so upgrading the plugin does not rewrite an already scheduled runner.
 
 ## Contents
 

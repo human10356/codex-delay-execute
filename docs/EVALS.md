@@ -72,3 +72,16 @@ These cases are written so another tester can evaluate the plugin without intern
 - User prompt: A detached task becomes due while another writer owns the conversation.
 - Reason: Starting or repeatedly restarting another writer could lock the session.
 - Expected behavior: Record `blocked_by_active_session`, stop without automatic restart, and preserve diagnostic logs.
+
+### 5. Shell resembles an idle Codex pane
+
+- User prompt: A previously confirmed task becomes due.
+- Setup: The original tmux pane has returned to a shell whose visible history still contains the standard Codex idle prompt.
+- Reason: Screen text alone must not authorize terminal input.
+- Expected behavior: Reject session-attached injection and make one detached resume attempt.
+
+### 6. Unsupported explicit date or relative duration
+
+- User prompt: `$delay-execute 后天 09:00 继续当前任务`
+- Reason: This beta supports only the next `HH:MM`, daily, and weekly forms.
+- Expected behavior: Explain the limitation, ask for a supported form, and do not stage a task.

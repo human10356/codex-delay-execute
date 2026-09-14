@@ -11,7 +11,7 @@ The plugin stores the following information so a confirmed task can resume the c
 - captured working directory
 - schedule and delivery metadata
 - local execution logs and task history
-- tmux socket and pane identifiers when session-attached delivery is available
+- tmux socket, pane, terminal, and local process identifiers when session-attached delivery is available
 
 Data is stored under `PLUGIN_DATA` when provided by the plugin host. Otherwise it uses `$CODEX_HOME/plugin-data/delay-execute`, falling back to `~/.codex/plugin-data/delay-execute` for the default Codex home. User-level systemd units are created under `~/.config/systemd/user/` only after explicit confirmation.
 

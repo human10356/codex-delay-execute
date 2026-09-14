@@ -27,6 +27,8 @@
       "Interactive",
       "Write"
     ],
+    "websiteURL": "https://github.com/human10356/codex-delay-execute",
+    "privacyPolicyURL": "https://github.com/human10356/codex-delay-execute/blob/main/PRIVACY.md",
     "defaultPrompt": [
       "$delay-execute \u5728\u51cc\u6668 02:15 \u7ee7\u7eed\u7b2c\u4e94\u9636\u6bb5\u7684\u8bbe\u8ba1\u3001\u5f00\u53d1\u548c\u6d4b\u8bd5\u9a8c\u8bc1\u3002",
       "$delay-execute list",

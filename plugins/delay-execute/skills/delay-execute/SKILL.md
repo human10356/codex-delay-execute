@@ -25,7 +25,7 @@ The active-session hook supplies a JSON object containing exact `session_id`, `c
    - Daily: `--daily-at HH:MM`
    - Weekly: `--weekly-at HH:MM --weekday mon|tue|wed|thu|fri|sat|sun`
 
-   If the user gives no time, date, recurrence, or unambiguous relative delay, ask one concise question and do not stage anything. If a one-time time has already passed today, state that it resolves to tomorrow before staging.
+   These are the only schedule forms supported by this beta. If the user gives an explicit calendar date, a relative duration, or no complete supported form, explain the limitation, ask for one of the forms above, and do not stage anything. If a one-time time has already passed today, state that it resolves to tomorrow before staging.
 2. Run this command exactly once, replacing arguments with shell-safe values from the hook context and exactly one schedule form:
 
    `python3 "<helper_path>" --state-dir "<state_dir>" --import-legacy-state stage --session-id <session_id> --cwd <cwd> --at <HH:MM> --prompt <prompt>`
@@ -51,7 +51,7 @@ Only treat `$delay-execute confirm <任务ID>` as confirmation. Do not treat a b
 
 ## Safety rules
 
-- Do not accept a past time silently: the helper schedules it for the next local day; disclose the resolved time before confirmation.
+- Do not accept a past time silently: the helper schedules it for the next valid local day, accounting for daylight-saving transitions; disclose the resolved time before confirmation.
 - Do not use `--dangerously-bypass-approvals`, `--full-auto`, or any permission-broadening option.
 - Do not schedule a task in a directory that no longer exists. A confirmed runner may add `--skip-git-repo-check` when the captured working directory is not a Git repository; this only bypasses Codex's repository preflight and does not bypass authentication, hook trust, approval, or sandbox policies.
 - If the task needs network, repository credentials, or interactive approval, explain that unattended execution can fail and allow the user to revise it.

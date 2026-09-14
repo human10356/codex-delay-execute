@@ -18,6 +18,7 @@ SEMVER = re.compile(
 )
 ABSOLUTE_USER_HOME = re.compile(r"/(?:home|Users)/[^/\s]+(?:/|\b)")
 REPOSITORY_URL = "https://github.com/human10356/codex-delay-execute"
+PRIVACY_URL = f"{REPOSITORY_URL}/blob/main/PRIVACY.md"
 
 
 def fail(message: str) -> None:
@@ -98,8 +99,16 @@ def validate() -> None:
             fail(f"{manifest_name} manifest homepage URL is stale or unexpected")
 
     extension = portable.get("extensions", {}).get("com.openai", {})
-    if extension.get("interface", {}).get("websiteURL") != REPOSITORY_URL:
+    portable_interface = extension.get("interface", {})
+    compatibility_interface = compatibility.get("interface", {})
+    if portable_interface.get("websiteURL") != REPOSITORY_URL:
         fail("portable manifest website URL is stale or unexpected")
+    if compatibility_interface.get("websiteURL") != REPOSITORY_URL:
+        fail("compatibility manifest website URL is stale or unexpected")
+    if portable_interface.get("privacyPolicyURL") != PRIVACY_URL:
+        fail("portable manifest privacy URL is stale or unexpected")
+    if compatibility_interface.get("privacyPolicyURL") != PRIVACY_URL:
+        fail("compatibility manifest privacy URL is stale or unexpected")
     require_relative_file(PLUGIN, extension.get("hooks"), "OpenAI hook path")
     prompts = extension.get("interface", {}).get("defaultPrompt")
     if not isinstance(prompts, list) or not 1 <= len(prompts) <= 3:

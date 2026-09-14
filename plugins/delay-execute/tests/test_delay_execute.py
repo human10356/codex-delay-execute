@@ -1,4 +1,5 @@
 import argparse
+import datetime as dt
 import importlib.util
 import json
 import os
@@ -9,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "delay_execute.py"
@@ -21,6 +23,20 @@ CAPTURE_SCRIPT = Path(__file__).parents[1] / "scripts" / "capture_context.py"
 
 
 class ExecutionModeTests(unittest.TestCase):
+    def test_next_run_preserves_named_timezone_across_dst_change(self):
+        now = dt.datetime(2026, 10, 31, 23, 30, tzinfo=ZoneInfo("America/New_York"))
+
+        target = delay_execute.next_at(23, 0, now=now)
+
+        self.assertEqual(target.isoformat(), "2026-11-01T23:00:00-05:00")
+
+    def test_next_run_skips_a_nonexistent_dst_wall_time(self):
+        now = dt.datetime(2026, 3, 7, 23, 30, tzinfo=ZoneInfo("America/New_York"))
+
+        target = delay_execute.next_at(2, 30, now=now)
+
+        self.assertEqual(target.isoformat(), "2026-03-09T02:30:00-04:00")
+
     def test_default_state_directory_follows_codex_home(self):
         with tempfile.TemporaryDirectory() as temporary:
             codex_home = Path(temporary) / "portable-codex-home"
@@ -170,12 +186,73 @@ class ExecutionModeTests(unittest.TestCase):
         )
 
     def test_tty_attachment_uses_the_current_tmux_pane(self):
-        self.assertEqual(
-            delay_execute.tmux_attachment(
+        identity = {
+            "pane_pid": "123",
+            "pane_tty": "/dev/pts/9",
+            "codex_pid": "456",
+            "codex_start_ticks": "999",
+        }
+        with patch.object(delay_execute, "tmux_pane_identity", return_value=identity) as inspect:
+            attachment = delay_execute.tmux_attachment(
                 {"TMUX": "/tmp/tmux.sock,123,0", "TMUX_PANE": "%9"}
-            ),
-            {"server": "/tmp/tmux.sock", "pane": "%9"},
+            )
+
+        self.assertEqual(
+            attachment,
+            {"server": "/tmp/tmux.sock", "pane": "%9", **identity},
         )
+        inspect.assert_called_once_with("/tmp/tmux.sock", "%9")
+
+    def test_tmux_pane_identity_finds_the_native_codex_process(self):
+        tmux_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="123\t/dev/pts/9\n", stderr=""
+        )
+        ps_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="123 node\n456 codex\n", stderr=""
+        )
+        with patch.object(
+            delay_execute.subprocess, "run", side_effect=[tmux_result, ps_result]
+        ), patch.object(delay_execute, "process_start_ticks", return_value="999"):
+            identity = delay_execute.tmux_pane_identity("/tmp/tmux.sock", "%9")
+
+        self.assertEqual(
+            identity,
+            {
+                "pane_pid": "123",
+                "pane_tty": "/dev/pts/9",
+                "codex_pid": "456",
+                "codex_start_ticks": "999",
+            },
+        )
+
+    def test_tmux_pane_identity_rejects_a_pane_without_native_codex(self):
+        tmux_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="123\t/dev/pts/9\n", stderr=""
+        )
+        ps_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="123 bash\n456 python3\n", stderr=""
+        )
+        with patch.object(
+            delay_execute.subprocess, "run", side_effect=[tmux_result, ps_result]
+        ), patch.object(delay_execute, "process_start_ticks") as start_ticks:
+            identity = delay_execute.tmux_pane_identity("/tmp/tmux.sock", "%9")
+
+        self.assertIsNone(identity)
+        start_ticks.assert_not_called()
+
+    def test_process_start_ticks_reads_proc_stat_without_parsing_the_command_name(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            proc_root = Path(temporary)
+            process = proc_root / "456"
+            process.mkdir()
+            fields = ["S", *("0" for _ in range(18)), "999", "0"]
+            (process / "stat").write_text(
+                f"456 (codex worker) {' '.join(fields)}\n", encoding="utf-8"
+            )
+
+            start_ticks = delay_execute.process_start_ticks("456", proc_root=proc_root)
+
+        self.assertEqual(start_ticks, "999")
 
     def test_runner_waits_for_idle_and_does_not_configure_systemd_restart(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -186,7 +263,14 @@ class ExecutionModeTests(unittest.TestCase):
                 "session_id": "session",
                 "prompt": "continue",
                 "execution_mode": "non_git",
-                "attachment": {"server": "/tmp/tmux.sock", "pane": "%9"},
+                "attachment": {
+                    "server": "/tmp/tmux.sock",
+                    "pane": "%9",
+                    "pane_pid": "123",
+                    "pane_tty": "/dev/pts/9",
+                    "codex_pid": "456",
+                    "codex_start_ticks": "999",
+                },
             }
             with patch.object(delay_execute, "STATE_DIR", root), patch.object(
                 delay_execute, "TASK_DIR", root / "tasks"
@@ -195,7 +279,7 @@ class ExecutionModeTests(unittest.TestCase):
             ), patch.object(delay_execute, "LOG_DIR", root / "logs"), patch.object(
                 delay_execute, "HISTORY_FILE", root / "history.jsonl"
             ), patch.object(delay_execute, "SYSTEMD_DIR", root / "systemd"), patch.object(
-                delay_execute.shutil, "which", return_value="/usr/bin/codex"
+                delay_execute.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}"
             ), patch.object(delay_execute, "execution_mode", return_value="non_git"):
                 runner = delay_execute.write_runner(record)
                 content = runner.read_text(encoding="utf-8")
@@ -206,8 +290,10 @@ class ExecutionModeTests(unittest.TestCase):
         paste = content.index("paste-buffer -d -t %9")
         settle = content.index("sleep 2", paste)
         submit = content.index("send-keys -t %9 Enter", paste)
+        final_identity_check = content.index("if ! original_codex_is_attached", settle)
         self.assertLess(paste, settle)
-        self.assertLess(settle, submit)
+        self.assertLess(settle, final_identity_check)
+        self.assertLess(final_identity_check, submit)
         self.assertIn("already has an active writer", content)
         self.assertIn(str(root / "tasks" / "delay_execute_runtime.py"), content)
         self.assertIn(f"--state-dir {root} transition", content)

@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 APP = "codex-delay-execute"
@@ -136,17 +137,75 @@ def parse_clock(value: str) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
-def next_at(hour: int, minute: int, weekday: int | None = None) -> dt.datetime:
-    now = dt.datetime.now().astimezone()
-    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if weekday is None:
-        if target <= now:
-            target += dt.timedelta(days=1)
-        return target
-    target += dt.timedelta(days=(weekday - target.weekday()) % 7)
-    if target <= now:
-        target += dt.timedelta(days=7)
-    return target
+def system_local_timezone() -> dt.tzinfo:
+    zoneinfo_roots = (Path("/usr/share/zoneinfo"), Path("/usr/lib/zoneinfo"))
+    try:
+        localtime = Path("/etc/localtime").resolve(strict=True)
+    except OSError:
+        localtime = None
+    if localtime is not None:
+        for root in zoneinfo_roots:
+            try:
+                name = localtime.relative_to(root.resolve(strict=True)).as_posix()
+            except (OSError, ValueError):
+                continue
+            if name.startswith(("posix/", "right/")):
+                name = name.split("/", 1)[1]
+            try:
+                return ZoneInfo(name)
+            except ZoneInfoNotFoundError:
+                continue
+        try:
+            with localtime.open("rb") as stream:
+                return ZoneInfo.from_file(stream)
+        except (OSError, ValueError):
+            pass
+    try:
+        name = Path("/etc/timezone").read_text(encoding="utf-8").strip()
+        if name:
+            return ZoneInfo(name)
+    except (OSError, UnicodeError, ZoneInfoNotFoundError):
+        pass
+    return dt.datetime.now().astimezone().tzinfo or dt.timezone.utc
+
+
+def local_time_candidates(
+    date: dt.date, hour: int, minute: int, timezone: dt.tzinfo
+) -> list[dt.datetime]:
+    wall_time = dt.datetime.combine(date, dt.time(hour, minute), tzinfo=timezone)
+    candidates = []
+    seen_instants = set()
+    for fold in (0, 1):
+        candidate = wall_time.replace(fold=fold)
+        instant = candidate.astimezone(dt.timezone.utc)
+        round_trip = instant.astimezone(timezone)
+        if round_trip.replace(tzinfo=None) != candidate.replace(tzinfo=None):
+            continue
+        timestamp = instant.timestamp()
+        if timestamp not in seen_instants:
+            candidates.append(candidate)
+            seen_instants.add(timestamp)
+    return sorted(candidates, key=lambda value: value.timestamp())
+
+
+def next_at(
+    hour: int,
+    minute: int,
+    weekday: int | None = None,
+    *,
+    now: dt.datetime | None = None,
+) -> dt.datetime:
+    now = dt.datetime.now(system_local_timezone()) if now is None else now
+    if now.tzinfo is None or now.utcoffset() is None:
+        fail("当前时间必须包含本机时区")
+    first_offset = 0 if weekday is None else (weekday - now.weekday()) % 7
+    step = 1 if weekday is None else 7
+    for offset in range(first_offset, first_offset + step * 3, step):
+        date = now.date() + dt.timedelta(days=offset)
+        for candidate in local_time_candidates(date, hour, minute, now.tzinfo):
+            if candidate.astimezone(dt.timezone.utc) > now.astimezone(dt.timezone.utc):
+                return candidate
+    fail("无法计算下一个有效的本机执行时间")
 
 
 def schedule_from_args(args: argparse.Namespace) -> tuple[str, str, dt.datetime]:
@@ -184,6 +243,73 @@ def systemd_quote_argument(value: str | Path) -> str:
     return f'"{escaped}"'
 
 
+def process_start_ticks(pid: str, proc_root: Path = Path("/proc")) -> str | None:
+    if not pid.isdigit():
+        return None
+    try:
+        stat_line = (proc_root / pid / "stat").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return None
+    separator = stat_line.rfind(") ")
+    if separator < 0:
+        return None
+    fields = stat_line[separator + 2 :].split()
+    if len(fields) <= 19 or not fields[19].isdigit():
+        return None
+    return fields[19]
+
+
+def tmux_pane_identity(server: str, pane: str) -> dict[str, str] | None:
+    try:
+        tmux_result = subprocess.run(
+            [
+                "tmux",
+                "-S",
+                server,
+                "display-message",
+                "-p",
+                "-t",
+                pane,
+                "#{pane_pid}\t#{pane_tty}",
+            ],
+            text=True,
+            capture_output=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if tmux_result.returncode:
+        return None
+    fields = tmux_result.stdout.strip().split("\t")
+    if len(fields) != 2 or not fields[0].isdigit() or not fields[1].startswith("/dev/"):
+        return None
+    pane_pid, pane_tty = fields
+    try:
+        ps_result = subprocess.run(
+            ["ps", "-t", pane_tty.removeprefix("/dev/"), "-o", "pid=,comm="],
+            text=True,
+            capture_output=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if ps_result.returncode:
+        return None
+    for line in ps_result.stdout.splitlines():
+        process = line.strip().split(maxsplit=1)
+        if len(process) == 2 and process[0].isdigit() and process[1] == "codex":
+            start_ticks = process_start_ticks(process[0])
+            if start_ticks is None:
+                return None
+            return {
+                "pane_pid": pane_pid,
+                "pane_tty": pane_tty,
+                "codex_pid": process[0],
+                "codex_start_ticks": start_ticks,
+            }
+    return None
+
+
 def tmux_attachment(environ: dict[str, str] | None = None) -> dict[str, str] | None:
     environ = os.environ if environ is None else environ
     tmux = environ.get("TMUX", "")
@@ -193,7 +319,10 @@ def tmux_attachment(environ: dict[str, str] | None = None) -> dict[str, str] | N
     server = tmux.split(",", 1)[0]
     if not server.startswith("/"):
         return None
-    return {"server": server, "pane": pane}
+    identity = tmux_pane_identity(server, pane)
+    if identity is None:
+        return None
+    return {"server": server, "pane": pane, **identity}
 
 
 def transition_task(identifier: str, status: str) -> None:
@@ -299,8 +428,24 @@ def write_runner(record: dict) -> Path:
     attachment = record.get("attachment") or {}
     server = attachment.get("server") if isinstance(attachment, dict) else None
     pane = attachment.get("pane") if isinstance(attachment, dict) else None
+    pane_pid = attachment.get("pane_pid") if isinstance(attachment, dict) else None
+    pane_tty = attachment.get("pane_tty") if isinstance(attachment, dict) else None
+    codex_pid = attachment.get("codex_pid") if isinstance(attachment, dict) else None
+    codex_start_ticks = (
+        attachment.get("codex_start_ticks") if isinstance(attachment, dict) else None
+    )
     tmux_server = shlex.quote(server) if isinstance(server, str) else ""
     tmux_pane = shlex.quote(pane) if isinstance(pane, str) else ""
+    expected_pane_pid = shlex.quote(str(pane_pid)) if str(pane_pid).isdigit() else "''"
+    expected_pane_tty = shlex.quote(pane_tty) if isinstance(pane_tty, str) else "''"
+    expected_codex_pid = shlex.quote(str(codex_pid)) if str(codex_pid).isdigit() else "''"
+    expected_codex_start_ticks = (
+        shlex.quote(str(codex_start_ticks)) if str(codex_start_ticks).isdigit() else "''"
+    )
+    ps = shutil.which("ps")
+    if server and pane and not ps:
+        fail("找不到 ps 命令；无法安全验证 tmux 中的 Codex 进程")
+    ps_command = shlex.quote(ps) if ps else "ps"
     content = f"""#!/usr/bin/env bash
 set -euo pipefail
 umask 077
@@ -346,12 +491,28 @@ run_detached() {{
   record_event failed "$status"
   return "$status"
 }}
+original_codex_is_attached() {{
+  [ -n {expected_pane_pid} ] && [ -n {expected_pane_tty} ] && [ -n {expected_codex_pid} ] && \
+    [ -n {expected_codex_start_ticks} ] || return 1
+  identity=$(tmux -S {tmux_server} display-message -p -t {tmux_pane} '#{{pane_pid}}\t#{{pane_tty}}' 2>/dev/null) || return 1
+  current_pane_pid=${{identity%%$'\t'*}}
+  current_pane_tty=${{identity#*$'\t'}}
+  [ "$current_pane_pid" = {expected_pane_pid} ] || return 1
+  [ "$current_pane_tty" = {expected_pane_tty} ] || return 1
+  [ -r /proc/{expected_codex_pid}/stat ] || return 1
+  stat_line=$(< /proc/{expected_codex_pid}/stat) || return 1
+  stat_fields=${{stat_line##*) }}
+  IFS=' ' read -r -a proc_fields <<< "$stat_fields"
+  [ "${{proc_fields[19]:-}}" = {expected_codex_start_ticks} ] || return 1
+  {ps_command} -t "${{current_pane_tty#/dev/}}" -o pid=,comm= 2>/dev/null | \
+    awk -v expected={expected_codex_pid} '$1 == expected && $2 == "codex" {{ found=1 }} END {{ exit !found }}'
+}}
 if [ -n {shlex.quote(tmux_server)} ] && [ -n {shlex.quote(tmux_pane)} ]; then
   transition waiting_for_idle
   record_event waiting_for_idle 0
   deadline=$(( $(date +%s) + {IDLE_WAIT_SECONDS} ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if ! tmux -S {tmux_server} has-session >/dev/null 2>&1; then
+    if ! original_codex_is_attached; then
       record_event attachment_unavailable 0
       run_detached
       exit $?
@@ -363,9 +524,19 @@ if [ -n {shlex.quote(tmux_server)} ] && [ -n {shlex.quote(tmux_pane)} ]; then
     fi
     if printf '%s\n' "$pane_snapshot" | tail -n 8 | grep -q 'Ask Codex to do anything' && \
        ! printf '%s\n' "$pane_snapshot" | tail -n 8 | grep -q 'Working ('; then
+      if ! original_codex_is_attached; then
+        record_event attachment_unavailable 0
+        run_detached
+        exit $?
+      fi
       tmux -S {tmux_server} set-buffer -- {shlex.quote(record['prompt'])}
       tmux -S {tmux_server} paste-buffer -d -t {tmux_pane}
       sleep {TMUX_SUBMIT_SETTLE_SECONDS}
+      if ! original_codex_is_attached; then
+        record_event attachment_unavailable 0
+        run_detached
+        exit $?
+      fi
       tmux -S {tmux_server} send-keys -t {tmux_pane} Enter
       transition injected
       record_event injected 0

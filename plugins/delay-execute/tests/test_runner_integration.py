@@ -19,12 +19,12 @@ delay_execute = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(delay_execute)
 
-REQUIRED_TOOLS = ("bash", "flock", "timeout", "tmux")
+REQUIRED_TOOLS = ("bash", "flock", "ps", "timeout", "tmux")
 
 
 @unittest.skipUnless(
     all(shutil.which(tool) for tool in REQUIRED_TOOLS),
-    "runner integration tests require bash, flock, timeout, and tmux",
+    "runner integration tests require bash, flock, ps, timeout, and tmux",
 )
 class RunnerIntegrationTests(unittest.TestCase):
     def setUp(self):
@@ -35,6 +35,12 @@ class RunnerIntegrationTests(unittest.TestCase):
         self.systemd_dir = self.root / "systemd"
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir()
+        self.pane_bin_dir = self.root / "pane-bin"
+        self.pane_bin_dir.mkdir()
+        self.pane_codex = self.pane_bin_dir / "codex"
+        bash = shutil.which("bash")
+        assert bash is not None
+        shutil.copy2(bash, self.pane_codex)
         self.fake_codex_log = self.root / "fake-codex.jsonl"
         self.original_state_dir = delay_execute.STATE_DIR
         self.original_systemd_dir = delay_execute.SYSTEMD_DIR
@@ -75,9 +81,10 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
                 check=False,
             )
 
-    def _start_tmux_pane(self, *, busy: bool = False) -> tuple[str, str]:
+    def _start_tmux_pane(self, *, busy: bool = False, codex_process: bool = True) -> dict:
         label = f"delay-execute-e2e-{uuid.uuid4().hex}"
         self.tmux_labels.append(label)
+        shell = str(self.pane_codex) if codex_process else "bash"
         subprocess.run(
             [
                 "tmux",
@@ -87,7 +94,7 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
                 "-d",
                 "-s",
                 "e2e",
-                "bash",
+                shell,
                 "--noprofile",
                 "--norc",
                 "-i",
@@ -119,6 +126,22 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
             capture_output=True,
             text=True,
         ).stdout.strip()
+        pane_pid = subprocess.run(
+            ["tmux", "-S", server, "display-message", "-p", "-t", pane, "#{pane_pid}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        pane_tty = subprocess.run(
+            ["tmux", "-S", server, "display-message", "-p", "-t", pane, "#{pane_tty}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        codex_pid = pane_pid if codex_process else "0"
+        codex_start_ticks = (
+            delay_execute.process_start_ticks(codex_pid) if codex_process else "0"
+        )
         for _ in range(50):
             snapshot = subprocess.run(
                 ["tmux", "-S", server, "capture-pane", "-p", "-t", pane, "-S", "-8"],
@@ -127,7 +150,14 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
                 text=True,
             ).stdout
             if prompt in snapshot:
-                return server, pane
+                return {
+                    "server": server,
+                    "pane": pane,
+                    "pane_pid": pane_pid,
+                    "pane_tty": pane_tty,
+                    "codex_pid": codex_pid,
+                    "codex_start_ticks": codex_start_ticks,
+                }
             time.sleep(0.05)
         self.fail("tmux pane did not render the expected prompt")
 
@@ -174,12 +204,10 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         ]
 
     def test_idle_tmux_pane_receives_prompt_without_detached_writer(self):
-        server, pane = self._start_tmux_pane()
+        attachment = self._start_tmux_pane()
         injected_marker = self.root / "injected"
         prompt = f"printf injected-ok > {shlex.quote(str(injected_marker))}"
-        identifier, runner, environment = self._create_runner(
-            {"server": server, "pane": pane}, prompt
-        )
+        identifier, runner, environment = self._create_runner(attachment, prompt)
 
         result = self._run_runner(runner, environment)
         for _ in range(50):
@@ -198,10 +226,8 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         )
 
     def test_busy_tmux_pane_does_not_start_detached_writer(self):
-        server, pane = self._start_tmux_pane(busy=True)
-        identifier, runner, environment = self._create_runner(
-            {"server": server, "pane": pane}
-        )
+        attachment = self._start_tmux_pane(busy=True)
+        identifier, runner, environment = self._create_runner(attachment)
         environment["DELAY_EXECUTE_FAKE_CODEX_LOG"] = str(self.fake_codex_log)
         environment["DELAY_EXECUTE_FAKE_CODEX_MODE"] = "success"
 
@@ -220,12 +246,10 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         )
 
     def test_missing_tmux_pane_runs_one_detached_attempt(self):
-        server, pane = self._start_tmux_pane()
-        identifier, runner, environment = self._create_runner(
-            {"server": server, "pane": pane}
-        )
+        attachment = self._start_tmux_pane()
+        identifier, runner, environment = self._create_runner(attachment)
         subprocess.run(
-            ["tmux", "-S", server, "kill-server"],
+            ["tmux", "-S", attachment["server"], "kill-server"],
             check=True,
             capture_output=True,
         )
@@ -239,6 +263,41 @@ if os.environ.get("DELAY_EXECUTE_FAKE_CODEX_MODE") == "active_writer":
         ]
         self.assertEqual(len(invocations), 1)
         self.assertEqual(invocations[0][:2], ["exec", "resume"])
+        self.assertEqual(self._record(identifier)["runtime_status"], "completed")
+
+    def test_shell_with_codex_prompt_is_never_injected(self):
+        attachment = self._start_tmux_pane(codex_process=False)
+        injected_marker = self.root / "unsafe-shell-injection"
+        prompt = f"printf unsafe > {shlex.quote(str(injected_marker))}"
+        identifier, runner, environment = self._create_runner(attachment, prompt)
+
+        result = self._run_runner(runner, environment)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(injected_marker.exists())
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(len(invocations), 1)
+        self.assertEqual(self._record(identifier)["runtime_status"], "completed")
+
+    def test_replaced_codex_process_is_never_injected(self):
+        attachment = self._start_tmux_pane()
+        attachment["codex_start_ticks"] = "1"
+        injected_marker = self.root / "replaced-process-injection"
+        prompt = f"printf unsafe > {shlex.quote(str(injected_marker))}"
+        identifier, runner, environment = self._create_runner(attachment, prompt)
+
+        result = self._run_runner(runner, environment)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(injected_marker.exists())
+        invocations = [
+            json.loads(line)
+            for line in self.fake_codex_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(len(invocations), 1)
         self.assertEqual(self._record(identifier)["runtime_status"], "completed")
 
     def test_active_writer_becomes_terminal_without_restart(self):

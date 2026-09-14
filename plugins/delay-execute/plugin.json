@@ -31,6 +31,7 @@
           "Write"
         ],
         "websiteURL": "https://github.com/human10356/codex-delay-execute",
+        "privacyPolicyURL": "https://github.com/human10356/codex-delay-execute/blob/main/PRIVACY.md",
         "defaultPrompt": [
           "$delay-execute 在凌晨 02:15 继续第五阶段的设计、开发和测试验证。",
           "$delay-execute list",
