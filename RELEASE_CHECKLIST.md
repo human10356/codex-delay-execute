@@ -32,7 +32,7 @@
 ### Before changing repository visibility
 
 - [ ] Verify the latest commit passes every GitHub Actions matrix job.
-- [ ] Repeat the missed-timer lifecycle check across a physical host logout or reboot before treating the isolated systemd result as release-complete evidence.
+- [ ] Stop the full WSL virtual machine (or reboot Windows), allow a timer deadline to pass, start the distribution again, and verify exactly one catch-up delivery before treating the isolated systemd result as release-complete evidence.
 - [ ] Update release wording, replace the changelog's `unreleased` marker with the release date, and commit the result.
 - [ ] Create and push the annotated `v0.1.0-beta.2` tag from the reviewed commit.
 

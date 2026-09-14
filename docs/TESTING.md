@@ -29,8 +29,9 @@ On 2026-09-14, the release candidate was tested on Linux with Codex CLI 0.154.0,
 - Next-run calculation was verified across both a daylight-saving offset change and a nonexistent spring-forward wall time.
 - A private `v0.1.0-beta.1` installation was upgraded to the `0.1.0-beta.2` candidate. Plugin data survived both upgrade and uninstall, while the installed plugin cache was removed on uninstall.
 - In an isolated Ubuntu 24.04.4 systemd 255 environment, a real generated timer was allowed to expire while a non-lingering user manager was stopped. Starting the user manager again delivered the task exactly once and recorded a successful service result. A second generated timer expired while the full container userspace was stopped; with lingering enabled, the user manager started automatically and delivered that task exactly once after startup. Both tasks ran from a non-Git directory through the detached fallback.
+- On the WSL2 development host, a scheduled reboot-control task fired while the same WSL boot and original tmux session were still active. It was accepted exactly once through `codex queue`, with no writer conflict or restart. This is a useful control result but is not counted as reboot evidence because the boot ID, uptime, user manager, and original pane did not change.
 
-The host machine had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified, but a physical host logout/reboot was deliberately not performed because it would interrupt the testing session. The isolated lifecycle test exercises the relevant systemd shutdown, startup, lingering, and persistent-timer behavior, but the physical host scenario remains a separate final release gate.
+The development host is WSL2 and had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified. WSL user lingering cannot start a stopped WSL virtual machine, so a Windows restart or `wsl --shutdown` requires the distribution to be started again before a persistent timer can catch up. The isolated lifecycle test exercises the relevant systemd shutdown, startup, lingering, and persistent-timer behavior, but the full WSL virtual-machine lifecycle remains a separate final release gate.
 
 ## Git installation
 
@@ -99,7 +100,7 @@ Use disposable prompts and inspect `$delay-execute list`, task history, logs, an
 - [x] Stop a persistent timer across its deadline and verify it runs immediately after reactivation.
 - [x] Stop a non-lingering user manager across a timer deadline and verify the timer runs exactly once when the user manager starts again.
 - [x] Stop and restart an isolated Linux systemd userspace across a timer deadline with lingering enabled and verify the user manager and task start automatically.
-- [ ] Repeat the missed-timer test across a physical host logout or reboot.
+- [ ] Stop the full WSL virtual machine, allow a timer deadline to pass, start the distribution again, and verify the task catches up exactly once. A Windows physical reboot may be used instead of `wsl --shutdown`.
 - [x] Test migration from the legacy state directory with non-sensitive fixture data.
 - [x] Uninstall the plugin and verify the documented data-retention behavior.
 

@@ -16,6 +16,8 @@ The plugin is intended for users who want to continue the exact same CLI convers
 
 The computer and the user's systemd manager must be running when a task becomes due. On systems that stop the user manager after logout, `loginctl enable-linger <user>` may be needed.
 
+WSL2 is not an always-running Linux host. The plugin can run inside a WSL2 distribution only while that distribution and its systemd instance are running. User lingering cannot start a stopped WSL virtual machine or wake Windows. After a Windows reboot or `wsl --shutdown`, start the distribution again; persistent timers can catch up only after its user manager becomes available.
+
 ## Installation and paths
 
 Install the plugin through the Codex plugin manager and a configured marketplace:
@@ -88,6 +90,7 @@ Common issues:
 - Missing active-session context: open `/hooks`, review and trust the plugin hook, then retry in a new thread.
 - `blocked_by_active_session`: another Codex process owns the conversation and detached delivery was not attempted again.
 - No run after logout: enable the user systemd manager to linger or keep the login session active.
+- No run while WSL is stopped: start the WSL distribution. Neither this plugin nor systemd user lingering can wake a stopped WSL virtual machine.
 - Prompt was not processed immediately: inspect the task log for a queue failure or detached writer conflict. Attached queue delivery requires a Codex CLI version that provides `codex queue`.
 
 Before uninstalling, cancel every scheduled task. Uninstalling the plugin removes its cache entry but intentionally does not stop user-level systemd timers or delete retained plugin data.
@@ -102,7 +105,7 @@ Before uninstalling, cancel every scheduled task. Uninstalling the plugin remove
 
 ## Scope
 
-This is a Linux-first Codex CLI plugin. Native Windows, macOS launchd, non-systemd Linux, and GUI-only scheduling are not currently supported.
+This is a Linux-first Codex CLI plugin. WSL2 is best-effort and subject to the virtual-machine lifecycle limitation above. Native Windows, macOS launchd, non-systemd Linux, and GUI-only scheduling are not currently supported.
 
 ## Development
 
