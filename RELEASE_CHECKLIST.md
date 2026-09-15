@@ -52,4 +52,4 @@
 - [x] A separate Ubuntu 24.04.5 WSL distribution installed `v0.1.0-beta.3` from the HTTPS Git Marketplace with a fresh Codex home, disabled credential helpers, and no GitHub credentials. Codex listed the installed plugin as enabled.
 - [x] The anonymous tag checkout matched commit `3cbaf59dd9d9789be687bcf60dcc2d5ebd77d9dc` and passed release validation, Python compilation, and all 34 tests. The installed cache passed plugin and skill validation, compilation, and all 34 tests; its source files matched the tag checkout.
 - [x] Record the actual 2026-09-15 publication date in the changelog, checklist, and testing record; commit the documentation without moving the beta.3 tag.
-- [ ] Publish the final GitHub release notes only after the anonymous installation succeeds.
+- [x] Publish the final GitHub release notes after anonymous installation succeeded. Release `v0.1.0-beta.3` (GitHub release ID `389183376`) was published on 2026-09-15 at 21:46:53 CST with `draft=false` and `prerelease=true`; its existing tag still peels to reviewed commit `3cbaf59dd9d9789be687bcf60dcc2d5ebd77d9dc`.
