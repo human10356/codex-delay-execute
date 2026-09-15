@@ -150,6 +150,13 @@ class ExecutionModeTests(unittest.TestCase):
         self.assertIn('$PLUGIN_ROOT/scripts/capture_context.py', command)
         self.assertNotIn("/home/", command)
 
+    def test_codex_manifest_is_not_shadowed_by_a_portable_root_manifest(self):
+        plugin_root = Path(__file__).parents[1]
+
+        self.assertFalse((plugin_root / "plugin.json").exists())
+        self.assertTrue((plugin_root / ".codex-plugin" / "plugin.json").is_file())
+        self.assertTrue((plugin_root / "hooks" / "hooks.json").is_file())
+
     def test_capture_context_reports_portable_runtime_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "installed plugin"

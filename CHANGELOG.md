@@ -2,6 +2,7 @@
 
 ## 0.1.0-beta.3 (unreleased)
 
+- Prevent a root Agent Plugins manifest from shadowing the canonical Codex manifest and disabling bundled hook discovery in Codex CLI 0.154.0.
 - Persist an at-most-once claim before a one-time task invokes Codex.
 - Attempt to disable a one-time timer as soon as its only attempt is claimed, preserving the real systemd exit code on failure.
 - Suppress repeated service activation without invoking Codex while leaving daily and weekly schedules recurring.

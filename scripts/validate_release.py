@@ -35,15 +35,6 @@ def read_json(path: Path) -> dict:
     return value
 
 
-def require_relative_file(base: Path, raw_path: object, label: str) -> Path:
-    if not isinstance(raw_path, str) or not raw_path.startswith("./"):
-        fail(f"{label} must be a ./-prefixed relative path")
-    candidate = (base / raw_path).resolve()
-    if not candidate.is_relative_to(base.resolve()) or not candidate.is_file():
-        fail(f"{label} does not resolve to a file inside the plugin")
-    return candidate
-
-
 def tracked_files() -> list[Path]:
     result = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -51,14 +42,20 @@ def tracked_files() -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [ROOT / name.decode() for name in result.stdout.split(b"\0") if name]
+    paths = [ROOT / name.decode() for name in result.stdout.split(b"\0") if name]
+    return [path for path in paths if path.is_file()]
 
 
 def validate() -> None:
     marketplace = read_json(ROOT / ".agents/plugins/marketplace.json")
-    portable = read_json(PLUGIN / "plugin.json")
-    compatibility = read_json(PLUGIN / ".codex-plugin/plugin.json")
+    manifest = read_json(PLUGIN / ".codex-plugin/plugin.json")
     hooks = read_json(PLUGIN / "hooks/hooks.json")
+
+    if (PLUGIN / "plugin.json").exists():
+        fail(
+            "root plugin.json shadows the Codex manifest and prevents bundled "
+            "hook discovery in Codex CLI 0.154.0"
+        )
 
     if marketplace.get("name") != "delay-execute-marketplace":
         fail("unexpected marketplace name")
@@ -69,7 +66,7 @@ def validate() -> None:
     if not isinstance(entry, dict):
         fail("marketplace plugin entry must be an object")
 
-    names = {entry.get("name"), portable.get("name"), compatibility.get("name")}
+    names = {entry.get("name"), manifest.get("name")}
     if names != {"delay-execute"} or PLUGIN.name not in names:
         fail("plugin names and directory name must match")
     if entry.get("source") != {
@@ -85,34 +82,24 @@ def validate() -> None:
     if entry.get("category") != "Productivity":
         fail("marketplace category must be Productivity")
 
-    version = portable.get("version")
+    version = manifest.get("version")
     if not isinstance(version, str) or not SEMVER.fullmatch(version):
-        fail("portable plugin version is not strict semantic versioning")
-    if compatibility.get("version") != version:
-        fail("portable and compatibility manifest versions differ")
-    if portable.get("license") != "MIT" or compatibility.get("license") != "MIT":
-        fail("both manifests must declare the MIT license")
-    for manifest_name, manifest in (("portable", portable), ("compatibility", compatibility)):
-        if manifest.get("repository") != REPOSITORY_URL:
-            fail(f"{manifest_name} manifest repository URL is stale or unexpected")
-        if manifest.get("homepage") != f"{REPOSITORY_URL}/tree/main/plugins/delay-execute":
-            fail(f"{manifest_name} manifest homepage URL is stale or unexpected")
+        fail("plugin version is not strict semantic versioning")
+    if manifest.get("license") != "MIT":
+        fail("plugin manifest must declare the MIT license")
+    if manifest.get("repository") != REPOSITORY_URL:
+        fail("plugin manifest repository URL is stale or unexpected")
+    if manifest.get("homepage") != f"{REPOSITORY_URL}/tree/main/plugins/delay-execute":
+        fail("plugin manifest homepage URL is stale or unexpected")
 
-    extension = portable.get("extensions", {}).get("com.openai", {})
-    portable_interface = extension.get("interface", {})
-    compatibility_interface = compatibility.get("interface", {})
-    if portable_interface.get("websiteURL") != REPOSITORY_URL:
-        fail("portable manifest website URL is stale or unexpected")
-    if compatibility_interface.get("websiteURL") != REPOSITORY_URL:
-        fail("compatibility manifest website URL is stale or unexpected")
-    if portable_interface.get("privacyPolicyURL") != PRIVACY_URL:
-        fail("portable manifest privacy URL is stale or unexpected")
-    if compatibility_interface.get("privacyPolicyURL") != PRIVACY_URL:
-        fail("compatibility manifest privacy URL is stale or unexpected")
-    require_relative_file(PLUGIN, extension.get("hooks"), "OpenAI hook path")
-    prompts = extension.get("interface", {}).get("defaultPrompt")
+    interface = manifest.get("interface", {})
+    if interface.get("websiteURL") != REPOSITORY_URL:
+        fail("plugin manifest website URL is stale or unexpected")
+    if interface.get("privacyPolicyURL") != PRIVACY_URL:
+        fail("plugin manifest privacy URL is stale or unexpected")
+    prompts = interface.get("defaultPrompt")
     if not isinstance(prompts, list) or not 1 <= len(prompts) <= 3:
-        fail("portable manifest must provide one to three starter prompts")
+        fail("plugin manifest must provide one to three starter prompts")
     if any(not isinstance(prompt, str) or len(prompt) > 128 for prompt in prompts):
         fail("starter prompts must be strings of at most 128 characters")
 

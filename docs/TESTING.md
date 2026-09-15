@@ -12,6 +12,8 @@ python3 -m unittest discover -s plugins/delay-execute/tests -v
 
 CI runs the same checks on Linux with Python 3.10, 3.12, and 3.14.
 
+The release validator rejects a root-level `plugins/delay-execute/plugin.json`. Codex CLI 0.154.0 gives that portable manifest precedence over `.codex-plugin/plugin.json` but does not map its OpenAI hook extension, so keeping both manifests makes the installed plugin appear to have no hooks. This release targets the Codex Marketplace and uses only the canonical Codex manifest plus the default `hooks/hooks.json` location.
+
 The test suite includes runner integration tests backed by real tmux, `flock`, and GNU `timeout` processes. A controlled fake `codex` executable covers both the queue and detached-resume command boundaries, so CI never writes to a real conversation.
 
 ## Completed Linux verification
@@ -32,9 +34,11 @@ On 2026-09-14, the release candidate was tested on Linux with Codex CLI 0.154.0,
 - On the WSL2 development host, a scheduled reboot-control task fired while the same WSL boot and original tmux session were still active. It was accepted exactly once through `codex queue`, with no writer conflict or restart. This is a useful control result but is not counted as reboot evidence because the boot ID, uptime, user manager, and original pane did not change.
 - On 2026-09-15, restarting the Ubuntu distribution created a new PID 1, but the kernel and journal retained the same boot ID and Windows had not restarted. No pending lifecycle task crossed that event, so it is recorded as a userspace-restart diagnostic rather than lifecycle-gate evidence.
 - Later on 2026-09-15, a host PowerShell `wsl --shutdown` ended the prior journal boot and changed the WSL kernel boot ID when Ubuntu restarted. The beta.3 plugin and hook loaded in the new Codex thread, user systemd was healthy with lingering enabled, and no delayed writer remained. Because no confirmed beta.3 task existed before shutdown, this verifies the VM shutdown/start procedure but does not satisfy the catch-up delivery gate.
+- A later Codex 0.154.0 regression investigation found that a root Agent Plugins `plugin.json` took precedence over `.codex-plugin/plugin.json` but did not expose `extensions.com.openai.hooks`, causing `/hooks` to report no installed hooks. Removing the shadowing root manifest and reinstalling a cache-busted build made both `plugin/read` and `hooks/list` expose the bundled `UserPromptSubmit` hook. A clean isolated Codex home reproduced successful discovery even when the working project itself was untrusted; the hook correctly remained untrusted until explicit user review.
 - Historical pre-candidate records exposed repeat activations of past one-time services. A regression test now starts the same generated runner twice and proves that the second activation records `duplicate_suppressed` without a second Codex invocation. A real user-systemd timer additionally became `inactive/disabled` after its first claim; forcing its service again left `attempt_count=1`, one `completed` event, and one suppressed duplicate. Daily runner coverage still accepts later invocations.
+- On 2026-09-15, task `20260915-124506-cc2cbb` was confirmed for 13:05 from the non-Git study directory with `Persistent=true`, `attempt_count=0`, and an active waiting user timer. The previous WSL kernel boot `75e439f7-29a6-4796-97bc-a0fd2c3f3d19` ended at 12:49:58; the new boot `ba2486ec-e23b-475f-ab00-e58fddd06adf` did not start until 13:06:34. Its user timer activated the service at 13:06:35, after the missed deadline. The original tmux pane was unavailable after VM shutdown, so delivery resumed the captured conversation in detached mode. History contains one each of `queued`, `attachment_unavailable`, `detached_running`, `completed`, and `finished`; the last two were recorded at 13:08:10 with exit code 0. The durable `attempt_count` remains 1, the timer is disabled/inactive, and the service is inactive with `Result=success` and `NRestarts=0`. The task lock is free and there is no background resume process. The thread writer lock belongs only to the later manually resumed foreground Codex session, as confirmed by `lslocks`. During detached delivery, six tmux integration tests errored because the sandbox rejected Unix socket access; without suppressing those errors, all 34 tests passed when rerun in a regular CLI environment, alongside release validation, Python compilation, plugin validation, and skill validation.
 
-The development host is WSL2 and had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified. WSL user lingering cannot start a stopped WSL virtual machine, so a Windows restart or `wsl --shutdown` requires the distribution to be started again before a persistent timer can catch up. The isolated lifecycle test exercises the relevant systemd shutdown, startup, lingering, and persistent-timer behavior, but the full WSL virtual-machine lifecycle remains a separate final release gate.
+The development host is WSL2 and had user lingering enabled. Unit syntax, `Persistent=true`, and the active user manager were verified. WSL user lingering cannot start a stopped WSL virtual machine, so a Windows restart or `wsl --shutdown` requires the distribution to be started again before a persistent timer can catch up. The isolated lifecycle test and the full WSL virtual-machine catch-up test both satisfy their respective lifecycle gates.
 
 ## Git installation
 
@@ -81,7 +85,7 @@ python3 -m unittest discover \
   -s "$anonymous_checkout/plugins/delay-execute/tests" -v
 ```
 
-Locate the installed plugin under `$clean_codex_home/plugins/cache`, then run the plugin validator, skill validator, Python compilation, and all 33 tests against that cache copy. The anonymous checkout and clean Codex home must not contain GitHub credentials. Remove both temporary directories after recording redacted results.
+Locate the installed plugin under `$clean_codex_home/plugins/cache`, then run the plugin validator, skill validator, Python compilation, and all 34 tests against that cache copy. The anonymous checkout and clean Codex home must not contain GitHub credentials. Remove both temporary directories after recording redacted results.
 
 An anonymous clone or install before the visibility change must fail. A successful private SSH install does not satisfy this gate.
 
@@ -104,7 +108,7 @@ Use disposable prompts and inspect `$delay-execute list`, task history, logs, an
 - [x] Stop a non-lingering user manager across a timer deadline and verify the timer runs exactly once when the user manager starts again.
 - [x] Stop and restart an isolated Linux systemd userspace across a timer deadline with lingering enabled and verify the user manager and task start automatically.
 - [x] Start the same one-time runner twice and verify the second activation is durably suppressed; verify a real user timer disables itself after claiming the first attempt.
-- [ ] Stop the full WSL virtual machine, allow a timer deadline to pass, start the distribution again, and verify the task catches up exactly once. A Windows physical reboot may be used instead of `wsl --shutdown`.
+- [x] Stop the full WSL virtual machine, allow a timer deadline to pass, start the distribution again, and verify the task catches up exactly once. A Windows physical reboot may be used instead of `wsl --shutdown`.
 - [x] Test migration from the legacy state directory with non-sensitive fixture data.
 - [x] Uninstall the plugin and verify the documented data-retention behavior.
 
