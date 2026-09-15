@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-beta.3 (candidate validated 2026-09-15; publication pending)
+## 0.1.0-beta.3 (published 2026-09-15)
 
 - Prevent a root Agent Plugins manifest from shadowing the canonical Codex manifest and disabling bundled hook discovery in Codex CLI 0.154.0.
 - Persist an at-most-once claim before a one-time task invokes Codex.

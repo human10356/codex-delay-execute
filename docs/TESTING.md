@@ -95,6 +95,14 @@ Locate the installed plugin under `$clean_codex_home/plugins/cache`, then run th
 
 An anonymous clone or install before the visibility change must fail. A successful private SSH install does not satisfy this gate.
 
+### Public beta.3 verification on 2026-09-15
+
+After the repository became public, an unauthenticated GitHub API request returned HTTP 200. Git credential helpers were disabled and credential prompts were blocked while HTTPS `git ls-remote` read the annotated `v0.1.0-beta.3` tag and peeled commit `3cbaf59dd9d9789be687bcf60dcc2d5ebd77d9dc`. GitHub Actions run `34963548192` for the pre-public `main` commit `c0db82ce205850a719e0bf1285473e6fb0803d2f` reported three completed, successful jobs: Python 3.10, 3.12, and 3.14.
+
+On the separate Ubuntu 24.04.5 WSL distribution, Codex CLI 0.154.0 installed the HTTPS Marketplace pinned to `v0.1.0-beta.3` and added the plugin in a fresh temporary Codex home. The process had no GitHub token, global or system Git configuration, credential helper, or interactive credential prompt. `codex plugin list` reported `delay-execute@delay-execute-marketplace` as `installed, enabled` at `0.1.0-beta.3+codex.20260914181621`. The Marketplace checkout HEAD and an independent anonymous shallow clone both matched the peeled tag commit. The clone passed release validation, Python compilation, and all 34 automated tests. The installed plugin cache passed the plugin validator, skill validator, Python compilation, and all 34 tests; a file comparison excluding generated Python bytecode found no differences from the tag source. The test did not trust the hook or schedule a task, and no test timer or detached Codex writer was left running. Codex warned that a temporary `/tmp` home cannot create PATH aliases, and WSL emitted a working-directory translation warning while starting the second distribution; neither warning was hidden, and neither prevented installation or validation.
+
+Anonymous browser-equivalent HTTP requests returned 200 for the repository, `PRIVACY.md`, `SECURITY.md`, and the beta.3 tag page. The security-advisory creation URL redirected to GitHub's login page, as expected for a private report. The actual repository-publication date was 2026-09-15. GitHub release notes are a separate remaining presentation step, not a prerequisite for anonymous Git Marketplace installation.
+
 ## Linux E2E matrix
 
 Use disposable prompts and inspect `$delay-execute list`, task history, logs, and relevant user units after each scenario.

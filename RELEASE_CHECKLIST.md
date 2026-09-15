@@ -34,22 +34,22 @@
 - [x] The annotated `v0.1.0-beta.3` tag was pushed from reviewed commit `3cbaf59dd9d9789be687bcf60dcc2d5ebd77d9dc`; the remote tag peels to that commit.
 - [x] On a separate Ubuntu 24.04.5 WSL distribution, a credential-free local beta.3 snapshot installed and passed all 34 tests. An independent repository-scoped SSH deploy key then read the private tag and installed the pinned Git Marketplace into an isolated Codex home. Release validation, Python compilation, all 34 tests, and installed skill/hook discovery passed. The fresh isolated hook remained untrusted, as expected; no timer or detached writer was left behind.
 
-## Remaining release gates, in order
+## Publication gates
 
 ### Before changing repository visibility
 
-- [ ] Verify the latest `main` commit passes every GitHub Actions matrix job (Python 3.10, 3.12, and 3.14).
+- [x] GitHub Actions run `34963548192` for `main` commit `c0db82ce205850a719e0bf1285473e6fb0803d2f` completed successfully; its Python 3.10, 3.12, and 3.14 jobs each concluded `success`.
 - [x] Keep the changelog's candidate-validation date distinct from the publication date, which cannot be recorded until the repository becomes public.
 - [x] Create and push the annotated `v0.1.0-beta.3` tag from the reviewed commit. Later audit-only documentation commits on `main` do not move this immutable tag.
 
 ### Publication boundary
 
-- [ ] Change repository visibility to public. This is the final publication state change; do it only after every pre-public gate passes.
+- [x] The repository became public on 2026-09-15 after the pre-public gates passed. Anonymous GitHub API access returned HTTP 200, and credential-disabled HTTPS Git access read the annotated beta.3 tag and its peeled commit.
 
 ### Read-only public verification
 
-- [ ] Confirm the repository, privacy policy, security policy, and release tag are anonymously readable; confirm the advisory URL reaches GitHub's expected sign-in boundary.
-- [ ] Install `v0.1.0-beta.3` through the HTTPS Git marketplace source in a clean Linux environment without GitHub credentials.
-- [ ] Run the release validator against an anonymous tag checkout; run the plugin and skill validators plus all 34 automated tests against the anonymously installed cache copy.
-- [ ] Record the actual publication date in the changelog and update this checklist and testing record; commit the documentation without moving the beta.3 tag.
+- [x] The repository, `PRIVACY.md`, `SECURITY.md`, and beta.3 tag page returned HTTP 200 anonymously; the private security-advisory creation URL redirected to GitHub's sign-in page.
+- [x] A separate Ubuntu 24.04.5 WSL distribution installed `v0.1.0-beta.3` from the HTTPS Git Marketplace with a fresh Codex home, disabled credential helpers, and no GitHub credentials. Codex listed the installed plugin as enabled.
+- [x] The anonymous tag checkout matched commit `3cbaf59dd9d9789be687bcf60dcc2d5ebd77d9dc` and passed release validation, Python compilation, and all 34 tests. The installed cache passed plugin and skill validation, compilation, and all 34 tests; its source files matched the tag checkout.
+- [x] Record the actual 2026-09-15 publication date in the changelog, checklist, and testing record; commit the documentation without moving the beta.3 tag.
 - [ ] Publish the final GitHub release notes only after the anonymous installation succeeds.

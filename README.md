@@ -2,21 +2,21 @@
 
 Beta marketplace for the Linux-only Delay Execute plugin for Codex CLI.
 
-The source tree contains the `0.1.0-beta.3` release candidate.
+The published beta release is `v0.1.0-beta.3`. This plugin supports Linux only.
 
 ## Installation
 
 Using HTTPS:
 
 ```bash
-codex plugin marketplace add https://github.com/human10356/codex-delay-execute.git --ref main
+codex plugin marketplace add https://github.com/human10356/codex-delay-execute.git --ref v0.1.0-beta.3
 codex plugin add delay-execute@delay-execute-marketplace
 ```
 
 Using SSH, including for a private fork when local Git credentials permit access:
 
 ```bash
-codex plugin marketplace add git@github.com:human10356/codex-delay-execute.git --ref main
+codex plugin marketplace add git@github.com:human10356/codex-delay-execute.git --ref v0.1.0-beta.3
 codex plugin add delay-execute@delay-execute-marketplace
 ```
 
@@ -31,7 +31,7 @@ codex plugin marketplace upgrade delay-execute-marketplace
 codex plugin add delay-execute@delay-execute-marketplace
 ```
 
-After an update that changes delivery behavior, cancel and recreate existing tasks. Each confirmed task has its own runner snapshot, so upgrading the plugin does not rewrite an already scheduled runner.
+The installation above pins `v0.1.0-beta.3`; select a newer release ref before upgrading when one becomes available. After an update that changes delivery behavior, cancel and recreate existing tasks. Each confirmed task has its own runner snapshot, so upgrading the plugin does not rewrite an already scheduled runner.
 
 ## Contents
 
