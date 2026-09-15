@@ -30,15 +30,14 @@
 - [x] A real user-systemd regression test disabled a claimed one-time timer and suppressed a forced second service activation without a second Codex invocation; recurring runner coverage still permits later daily and weekly invocations.
 - [x] A WSL distribution userspace restart was distinguished from a full WSL2 VM restart by PID 1 start time, kernel boot ID, journal boot ID, and Windows boot time; it was not counted as lifecycle-gate evidence.
 - [x] A host-issued `wsl --shutdown` changed the WSL kernel boot ID and created a new journal boot; no beta.3 task was pending, so this proves the VM lifecycle step but not persistent-timer catch-up.
-- [x] A confirmed one-time task missed its 13:05 deadline while WSL was shut down: the prior boot ended at 12:49:58, the next boot started at 13:06:34, and its persistent timer activated the service at 13:06:35. It completed once at 13:08:10 with `attempt_count=1`, service `Result=success`, `NRestarts=0`, a disabled timer, and a released task lock. The only remaining thread writer lock belongs to the manually resumed foreground Codex session.
+- [x] Final WSL catch-up audit on 2026-09-15: a confirmed one-time task missed its 13:05 deadline while WSL was shut down. The prior boot ended at 12:49:58, the next boot started at 13:06:34, and the persistent timer activated the service at 13:06:35. The task completed at 13:08:10; its durable state remains `attempted/completed` with `attempt_count=1`, history has exactly one event at each delivery stage, and the service journal has one start. The service remains inactive with `Result=success` and `NRestarts=0`; the timer is disabled/inactive, the task lock is free, and the only remaining thread writer lock belongs to the manually resumed foreground Codex session.
 
 ## Remaining release gates, in order
 
 ### Before changing repository visibility
 
 - [ ] Verify the latest commit passes every GitHub Actions matrix job.
-- [x] Stop the full WSL virtual machine (or reboot Windows), allow a timer deadline to pass, start the distribution again, and verify exactly one catch-up delivery before treating the isolated systemd result as release-complete evidence.
-- [ ] Update release wording, replace the changelog's `unreleased` marker with the release date, and commit the result.
+- [ ] Finalize release wording and replace the changelog's candidate-validation date with the actual publication date once it is known; commit the result.
 - [ ] Create and push the annotated `v0.1.0-beta.3` tag from the reviewed commit.
 
 ### Publication boundary

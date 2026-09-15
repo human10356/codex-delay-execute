@@ -1,12 +1,13 @@
 # Changelog
 
-## 0.1.0-beta.3 (unreleased)
+## 0.1.0-beta.3 (candidate validated 2026-09-15; publication pending)
 
 - Prevent a root Agent Plugins manifest from shadowing the canonical Codex manifest and disabling bundled hook discovery in Codex CLI 0.154.0.
 - Persist an at-most-once claim before a one-time task invokes Codex.
 - Attempt to disable a one-time timer as soon as its only attempt is claimed, preserving the real systemd exit code on failure.
 - Suppress repeated service activation without invoking Codex while leaving daily and weekly schedules recurring.
 - Add runner and real user-systemd regression coverage for duplicate activation.
+- Verify a one-time persistent timer catches up exactly once after a full WSL2 shutdown across its deadline, resumes the captured conversation, and releases the task lock.
 
 ## 0.1.0-beta.2 (superseded before release)
 
