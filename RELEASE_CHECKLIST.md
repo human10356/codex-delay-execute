@@ -31,14 +31,16 @@
 - [x] A WSL distribution userspace restart was distinguished from a full WSL2 VM restart by PID 1 start time, kernel boot ID, journal boot ID, and Windows boot time; it was not counted as lifecycle-gate evidence.
 - [x] A host-issued `wsl --shutdown` changed the WSL kernel boot ID and created a new journal boot; no beta.3 task was pending, so this proves the VM lifecycle step but not persistent-timer catch-up.
 - [x] Final WSL catch-up audit on 2026-09-15: a confirmed one-time task missed its 13:05 deadline while WSL was shut down. The prior boot ended at 12:49:58, the next boot started at 13:06:34, and the persistent timer activated the service at 13:06:35. The task completed at 13:08:10; its durable state remains `attempted/completed` with `attempt_count=1`, history has exactly one event at each delivery stage, and the service journal has one start. The service remains inactive with `Result=success` and `NRestarts=0`; the timer is disabled/inactive, the task lock is free, and the only remaining thread writer lock belongs to the manually resumed foreground Codex session.
+- [x] The annotated `v0.1.0-beta.3` tag was pushed from reviewed commit `3cbaf59dd9d9789be687bcf60dcc2d5ebd77d9dc`; the remote tag peels to that commit.
+- [x] On a separate Ubuntu 24.04.5 WSL distribution, a credential-free local beta.3 snapshot installed and passed all 34 tests. An independent repository-scoped SSH deploy key then read the private tag and installed the pinned Git Marketplace into an isolated Codex home. Release validation, Python compilation, all 34 tests, and installed skill/hook discovery passed. The fresh isolated hook remained untrusted, as expected; no timer or detached writer was left behind.
 
 ## Remaining release gates, in order
 
 ### Before changing repository visibility
 
-- [ ] Verify the latest commit passes every GitHub Actions matrix job.
-- [ ] Finalize release wording and replace the changelog's candidate-validation date with the actual publication date once it is known; commit the result.
-- [ ] Create and push the annotated `v0.1.0-beta.3` tag from the reviewed commit.
+- [ ] Verify the latest `main` commit passes every GitHub Actions matrix job (Python 3.10, 3.12, and 3.14).
+- [x] Keep the changelog's candidate-validation date distinct from the publication date, which cannot be recorded until the repository becomes public.
+- [x] Create and push the annotated `v0.1.0-beta.3` tag from the reviewed commit. Later audit-only documentation commits on `main` do not move this immutable tag.
 
 ### Publication boundary
 
@@ -49,4 +51,5 @@
 - [ ] Confirm the repository, privacy policy, security policy, and release tag are anonymously readable; confirm the advisory URL reaches GitHub's expected sign-in boundary.
 - [ ] Install `v0.1.0-beta.3` through the HTTPS Git marketplace source in a clean Linux environment without GitHub credentials.
 - [ ] Run the release validator against an anonymous tag checkout; run the plugin and skill validators plus all 34 automated tests against the anonymously installed cache copy.
+- [ ] Record the actual publication date in the changelog and update this checklist and testing record; commit the documentation without moving the beta.3 tag.
 - [ ] Publish the final GitHub release notes only after the anonymous installation succeeds.
