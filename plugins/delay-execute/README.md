@@ -6,6 +6,8 @@ Delay Execute schedules a confirmed prompt for the current Codex CLI conversatio
 
 The plugin is intended for users who want to continue the exact same CLI conversation later without keeping a second Codex writer alive.
 
+Typical uses include a next-morning project summary, a post-build review, a reminder to re-check a failing test, and daily or weekly maintenance prompts. It is deliberately scoped to the conversation that created the task; it is not a replacement for a system-wide job scheduler.
+
 ## Requirements
 
 - Linux with a user-level systemd manager
@@ -17,6 +19,12 @@ The plugin is intended for users who want to continue the exact same CLI convers
 The computer and the user's systemd manager must be running when a task becomes due. On systems that stop the user manager after logout, `loginctl enable-linger <user>` may be needed.
 
 WSL2 is not an always-running Linux host. The plugin can run inside a WSL2 distribution only while that distribution and its systemd instance are running. User lingering cannot start a stopped WSL virtual machine or wake Windows. After a Windows reboot or `wsl --shutdown`, start the distribution again; persistent timers can catch up only after its user manager becomes available.
+
+WSL lifecycle and portability:
+
+- A task can catch up after the *same* WSL distribution is started again, provided its Linux filesystem, Codex home, and user systemd state are intact.
+- A task does not run while the distribution is stopped, and it is not transferred automatically to another distribution (for example, Ubuntu-24.04 versus a second Ubuntu instance), Windows, macOS, or another Linux user.
+- To use the task in another environment, install the plugin there and create a new task from the conversation available in that environment. The original task remains owned by its source environment.
 
 ## Installation and paths
 
@@ -69,6 +77,24 @@ $delay-execute confirm-cancel <task-id>
 
 Cancellation also stops a currently waiting service. Task installation and cancellation always require explicit confirmation.
 
+## Uninstall and timer cleanup
+
+Always cancel tasks before removing the plugin. For each task returned by `list`, run `cancel` and then the exact `confirm-cancel` command. This disables the timer, stops a waiting service, and removes the generated unit files.
+
+After all tasks are cancelled, remove the plugin from Codex:
+
+```bash
+codex plugin remove delay-execute@<marketplace-name>
+```
+
+You may then remove the configured Marketplace source:
+
+```bash
+codex plugin marketplace remove <marketplace-name>
+```
+
+Plugin removal does not clean up already-created timers or retained task data. If the plugin can no longer be loaded, use the exact unit names and paths shown by the task record and stop them explicitly with `systemctl --user disable --now <name>.timer <name>.service`. Verify with `systemctl --user list-timers` and `ps`; avoid broad wildcard deletion.
+
 ## Delivery behavior
 
 Session-attached delivery records the tmux server socket, pane, terminal, and native Codex process IDs at staging time. When due, it queues the prompt only when those identities still match. The official Codex queue accepts the message whether the session is idle or working, and the runner never sends terminal keystrokes.
@@ -95,7 +121,7 @@ Common issues:
 - No run while WSL is stopped: start the WSL distribution. Neither this plugin nor systemd user lingering can wake a stopped WSL virtual machine.
 - Prompt was not processed immediately: inspect the task log for a queue failure or detached writer conflict. Attached queue delivery requires a Codex CLI version that provides `codex queue`.
 
-Before uninstalling, cancel every scheduled task. Uninstalling the plugin removes its cache entry but intentionally does not stop user-level systemd timers or delete retained plugin data.
+See [Uninstall and timer cleanup](#uninstall-and-timer-cleanup) before removing the plugin. Uninstalling removes its cache entry but intentionally does not stop user-level systemd timers or delete retained plugin data.
 
 ## Security model
 
